@@ -217,6 +217,15 @@ except Exception as e:
 client = discord.Client()
 
 @client.event
+async def on_member_join(member):
+	await client.send_message(member, """Welcome to the SVGE discord server! If you are a student, please verify this by sending:
+	`!email myemail@soton.ac.uk`.
+	You should then receive a code via email, which you can use to verify your account by sending:
+	`!verify [code]`.
+	This will give you access to student only areas as well as any perks given by your membership status.""")
+	log.LogMessage(f"Sent welcome message to user {member.name}\n")
+
+@client.event
 async def on_ready():
 	global HELP
 	log.LogMessage('Logged in as')
@@ -227,7 +236,7 @@ async def on_ready():
 @client.event
 async def on_message(message):
 	if message.channel.is_private and message.author != client.user:
-		log.LogMessage("Message received")
+		log.LogMessage(f"Message received from user {message.author.name}")
 		senderId = message.author.id
 		if(message.content[0] == '!'):
 			command = message.content[1:].split(' ')
@@ -254,7 +263,7 @@ async def on_message(message):
 				count = 0
 				if(senderId in emailRequestsCount.keys()):
 					count = emailRequestsCount[senderId]
-				if(count > 5 and GetLevelFromUser(message.author.id) != membershipLevel.index("commitee")):
+				if(count > 5 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
 					await client.send_message(message.channel, f"You've made too many requests, please speak to a committee member to sort this out")
 					return
 				emailRequestsCount[senderId] = count + 1
