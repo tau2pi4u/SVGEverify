@@ -15,7 +15,10 @@ class logger():
 	def __init__(self):
 		self.log = open("log.txt", "w")
 	def LogMessage(self, message):
-		self.log.write(message)
+		try:
+			self.log.write(f"{message}\n")
+		except:
+			self.log.write("Invalid log message input\n")
 		print(message)
 
 # Generates and returns a random 10 character string of letters, numbers and punctuation
@@ -39,7 +42,7 @@ Please reply !verify %s to the bot
 SVGE""" % (user, to, rand, rand)
 
 # Logs into an smtp server, sends an email and then logs out
-def SendMail(user, pw, to, text):
+async def SendMail(user, pw, to, text):
 	try:  
 		server_ssl = smtplib.SMTP_SSL('smtp.gmail.com', 465)
 		server_ssl.ehlo()   # optional
@@ -47,7 +50,7 @@ def SendMail(user, pw, to, text):
 		server_ssl.login(user, pw)
 		log.LogMessage("Login successful")
 		server_ssl.sendmail(user, to, text)
-		log.LogMessage(f"Sent to {to}")
+		log.LogMessage(f"Sent message")
 		server_ssl.close()
 		log.LogMessage("Disconnected")
 		# ...send emails
@@ -60,7 +63,7 @@ async def UpdateUserInfo(userId, emailHash):
 	if(emailHash in userInfo.keys()):
 		mLevel = max(mLevel, userInfo[emailHash]["level"])
 	userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
-	await UpdateMembershipInfoForUser(userId, emailHash)
+	await UpdateMembershipInfo()
 
 # Returns the membership level of a user
 def GetLevelFromUser(discordID):
@@ -96,63 +99,57 @@ async def UpdateMembershipInfo():
 		log.LogMessage(f"Failed to backup for reason {e}")
 
 	server = client.get_server(svgeServer)
-	for emailHash, info in userInfo.items():
-		log.LogMessage(f"Updating roles for user {info['id']} with level {info['level']}")
-		for i, level in enumerate(membershipLevel[1:]):
-			if(info["level"] > i and info["id"] != 0):
-				if(level == "committee"): 
-					print("User is commitee")
-					break
-				try:
-					user = server.get_member(str(info["id"]))
-					roleID = str(roleIds[level])
-					userRoleIds = [role.id for role in user.roles]
-					serverRoles = {role.id : role for role in server.roles}
-					if(roleID not in userRoleIds):
-						log.LogMessage(f"Attempting to apply role {level}")
-						await client.add_roles(user, serverRoles[roleID])
-				except Exception as e:
-					log.LogMessage(f"Failed to update user {info['id']} for reason {e}")
-
-# updates the membership info of a given member and backs it up
-async def UpdateMembershipInfoForUser(userID, emailHash):
-	sheet = gClient.open("member_data").sheet1
-	data = sheet.get_all_records()
-	for row in data:
-		hash = hashlib.sha256(row["email"].encode('utf-8')).hexdigest()
-		if(hash != emailHash):
-			continue
-		if(hash in userInfo.keys()):
-			userInfo[hash]["level"] = int(GetLevelFromString(row["level"]))
-		else:
-			userInfo[hash] = {"level" : int(GetLevelFromString(row["level"])), "id": 0}
-	try:
-		backup = gClient.open("verify_backup").sheet1
-		backup.clear()
-		backup.append_row(['email_hash', 'id', 'level'])
-		for emailHash, info in userInfo.items():
-			backup.append_row([str(emailHash), str(info["id"]), int(info["level"])])
-	except Exception as e:
-		log.LogMessage(f"Failed to backup for reason {e}")
-
-	server = client.get_server(svgeServer)
-	info = userInfo[emailHash]
-	log.LogMessage(f"Updating roles for user {info['id']} with level {info['level']}")
-	for i, level in enumerate(membershipLevel[1:]):
-		if(info["level"] > i and info["id"] != 0):
-			if(level == "committee"): 
-				print("User is commitee")
-				break
-			try:
-				user = server.get_member(str(info["id"]))
-				roleID = str(roleIds[level])
-				userRoleIds = [role.id for role in user.roles]
-				serverRoles = {role.id : role for role in server.roles}
-				if(roleID not in userRoleIds):
-					log.LogMessage(f"Attempting to apply role {level}")
-					await client.add_roles(user, serverRoles[roleID])
+	idToHashMap = {str(info["id"]) : emailHash for emailHash, info in userInfo.items()}
+	for member in server.members:
+		log.LogMessage(f"Updating roles for user {member.name}")
+		if(str(member.id) in idToHashMap.keys()):
+			info = userInfo[idToHashMap[member.id]]
+			for i, level in enumerate(membershipLevel[1:]):
+				if(info["level"] > i and info["id"] != 0):
+					if(level == "committee"): 
+						print("User is commitee")
+						break
+					try:
+						roleID = str(roleIds[level])
+						userRoleIds = [role.id for role in member.roles]
+						serverRoles = {role.id : role for role in server.roles}
+						if(roleID not in userRoleIds):
+							log.LogMessage(f"Attempting to apply role {level}")
+							await client.add_roles(member, serverRoles[roleID])
+					except Exception as e:
+						log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
+				elif(info["id"] !=0):
+					if(level == "committee"): 
+						break
+					try:
+						roleID = str(roleIds[level])
+						userRoleIds = [role.id for role in member.roles]
+						serverRoles = {role.id : role for role in server.roles}
+						if(roleID in userRoleIds):
+							log.LogMessage(f"Attempting to remove role {level}")
+							await client.remove_roles(member, serverRoles[roleID])
+					except Exception as e:
+						log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
+		elif not member.bot:
+			guestID = roleIds["guest"]
+			userRoleIds = [role.id for role in member.roles]
+			serverRoles = {role.id : role for role in server.roles}
+			try: 
+				if(guestID not in userRoleIds):
+					log.LogMessage(f"Attempting to apply role guest")
+					await client.add_roles(member, serverRoles[guestID])
 			except Exception as e:
-				log.LogMessage(f"Failed to update user {info['id']} for reason {e}")
+				log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
+			for i, level in enumerate(membershipLevel[1:]):
+				if(level == "committee"):
+					break
+				roleID = roleIds[level]
+				try: 
+					if(roleID in userRoleIds):
+						log.LogMessage(f"Attempting to apply role {level}")
+						await client.remove_roles(member, serverRoles[roleID])
+				except Exception as e:
+					log.LogMessage(f"Failed to remove non guest roles for user {member.name} for reason {e}")
 
 # Loads variables from a config file
 def LoadConfig():
@@ -218,6 +215,15 @@ client = discord.Client()
 
 @client.event
 async def on_member_join(member):
+	guestID = roleIds["guest"]
+	userRoleIds = [role.id for role in member.roles]
+	serverRoles = {role.id : role for role in server.roles}
+	try: 
+		if(guestID not in userRoleIds):
+			log.LogMessage(f"Attempting to apply role guest")
+			await client.add_roles(member, serverRoles[guestID])
+	except Exception as e:
+		log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
 	await client.send_message(member, """Welcome to the SVGE discord server! If you are a student, please verify this by sending:
 	`!email myemail@soton.ac.uk`.
 	You should then receive a code via email, which you can use to verify your account by sending:
@@ -267,21 +273,24 @@ async def on_message(message):
 				count = 0
 				if(senderId in emailRequestsCount.keys()):
 					count = emailRequestsCount[senderId]
-				if(count > 5 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
+				if(count > 3 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
 					await client.send_message(message.channel, f"You've made too many requests, please speak to a committee member to sort this out")
 					return
 				emailRequestsCount[senderId] = count + 1
 				email = command[1]
-				domain = email.split('@')[1]
+				try:
+					domain = email.split('@')[1]
+				except:
+					await client.send_message(message.channel, f"That wasn't a valid southampton email, please make sure to include @soton.ac.uk")
+					return
 				if(domain != "soton.ac.uk"):
-					await client.send_message(message.channel, f"Invalid domain {domain}")
+					await client.send_message(message.channel, f"Invalid domain {domain}, please make sure it's an @soton.ac.uk email address")
 					return
 				randomString = GenerateRandomString()
 				emailHash = hashlib.sha256(email.encode('utf-8'))
 				currentData[senderId] = {"email": emailHash.hexdigest(), "randomString": randomString}
 				text = GenerateEmailText(gmailUser, email, currentData[senderId]["randomString"])
-				log.LogMessage(text)
-				SendMail(gmailUser, gmailPw, email, text)
+				await SendMail(gmailUser, gmailPw, email, text)
 				await client.send_message(message.channel, f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account")
 				return
 			elif(command[0] == "verify"):
