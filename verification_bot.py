@@ -33,8 +33,8 @@ Subject: SVGE Email Verification
 This is an automated email sent by the SVGEVerify bot. 
 If you did not request this then please ignore it and if you continue to receive them, please contact svge@soton.ac.uk
 Your verification code is:
-<b>%s</b>
-Please reply !verify <b>%s</b> to the bot
+%s
+Please reply !verify %s to the bot
 
 SVGE""" % (user, to, rand, rand)
 
@@ -260,6 +260,10 @@ async def on_message(message):
 				await client.send_message(message.channel, f"Invalid command {command}")
 				return
 			if(command[0] == "email"):
+				server = client.get_server(svgeServer)
+				if(message.author.id not in [user.id for user in server.members]):
+					await client.send_message(message.channel, f"You are not in the SVGE server, please join before trying to verify")
+					return
 				count = 0
 				if(senderId in emailRequestsCount.keys()):
 					count = emailRequestsCount[senderId]
@@ -287,7 +291,11 @@ async def on_message(message):
 				inputCode = command[1]
 				trueCode = currentData[senderId]["randomString"]
 				if(inputCode == trueCode):
-					await UpdateUserInfo(senderId, currentData[senderId]["email"])
+					try:
+						await UpdateUserInfo(senderId, currentData[senderId]["email"])
+					except:
+						await client.send_message(message.channel, f"Something went wrong, please try again. If it continues to fail, please contact tau")
+						return
 					del currentData[senderId]
 					await client.send_message(message.channel, "Congratulations, you're verified. You should see your permissions adjusted to become correct soon")
 				else:
