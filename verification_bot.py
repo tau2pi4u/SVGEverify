@@ -160,7 +160,7 @@ async def UpdateMembershipInfo():
 	
 
 # Loads variables from a config file
-def LoadConfig():
+def LoadConfig(configPath):
 	#discord info
 	global discordToken
 	global svgeServer
@@ -171,7 +171,7 @@ def LoadConfig():
 	global gmailUser
 	global gmailPw
 	config = {}
-	with open("config.json", "r") as configJson:
+	with open(configPath, "r") as configJson:
 		config = json.load(configJson)
 	gmailUser = config["gmail"]["user"]
 	gmailPw = config["gmail"]["pw"]
@@ -182,11 +182,11 @@ def LoadConfig():
 	membershipLevel = config["discord"]["membershipLevel"]
 
 
-def LoadUsers():
+def LoadUsers(clientSecret):
 	global userInfo
 	try:
 		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-		creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
+		creds = ServiceAccountCredentials.from_json_keyfile_name(clientSecret, scope)
 		gClient = gspread.authorize(creds)
 		sheet = gClient.open("verify_backup").sheet1
 		data = sheet.get_all_records()
@@ -212,13 +212,13 @@ global currentUpdates
 currentUpdates = 0
 
 try:
-	LoadConfig()
+	LoadConfig(sys.argv[2])
 except Exception as e:
 	log.LogMessage(f"Failed to load config with reason {e}")
 	sys.exit(1)
 
 try:
-	LoadUsers()
+	LoadUsers(sys.argv[3])
 except Exception as e:
 	log.LogMessage(f"Failed to read user_info.json, error\n{e}")
 
