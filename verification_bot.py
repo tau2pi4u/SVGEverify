@@ -110,7 +110,7 @@ async def UpdateMembershipInfo():
 				for i, level in enumerate(membershipLevel[1:]):
 					if(info["level"] > i and info["id"] != 0):
 						if(level == "committee"): 
-							print("User {member.name} is commitee")
+							print(f"User {member.name} is commitee")
 							break
 						try:
 							roleID = str(roleIds[level])
