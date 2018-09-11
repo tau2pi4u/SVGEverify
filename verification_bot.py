@@ -83,7 +83,7 @@ def GetLevelFromString(levelString):
 async def UpdateMembershipInfo():
 	try:
 		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-		creds = ServiceAccountCredentials.from_json_keyfile_name('client_secret.json', scope)
+		creds = ServiceAccountCredentials.from_json_keyfile_name(clientSecret, scope)
 		gClient = gspread.authorize(creds)
 		sheet = gClient.open("member_data").sheet1
 		data = sheet.get_all_records()
@@ -182,7 +182,7 @@ def LoadConfig(configPath):
 	membershipLevel = config["discord"]["membershipLevel"]
 
 
-def LoadUsers(clientSecret):
+def LoadUsers():
 	global userInfo
 	try:
 		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
@@ -217,8 +217,11 @@ except Exception as e:
 	log.LogMessage(f"Failed to load config with reason {e}")
 	sys.exit(1)
 
+global clientSecret
+clientSecret = sys.argv[3]
+
 try:
-	LoadUsers(sys.argv[3])
+	LoadUsers()
 except Exception as e:
 	log.LogMessage(f"Failed to read user_info.json, error\n{e}")
 
