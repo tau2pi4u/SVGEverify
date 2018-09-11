@@ -12,8 +12,8 @@ import sys
 
 # data logger class to produce text logs
 class logger():
-	def __init__(self):
-		self.log = open("log.txt", "w")
+	def __init__(self, path = 'log.txt'):
+		self.log = open(path, "w")
 	def LogMessage(self, message):
 		try:
 			self.log.write(f"{message}\n")
@@ -196,7 +196,10 @@ def LoadUsers():
 	
 
 global log
-log = logger()
+if(len(sys.argv) > 1):
+	log = logger(sys.argv[1])
+else:
+	log = logger()
 
 
 
