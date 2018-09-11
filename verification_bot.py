@@ -105,20 +105,19 @@ async def UpdateMembershipInfo():
 		server = client.get_server(svgeServer)
 		idToHashMap = {str(info["id"]) : emailHash for emailHash, info in userInfo.items()}
 		for member in server.members:
-			log.LogMessage(f"Updating roles for user {member.name}")
 			if(str(member.id) in idToHashMap.keys()):
 				info = userInfo[idToHashMap[member.id]]
 				for i, level in enumerate(membershipLevel[1:]):
 					if(info["level"] > i and info["id"] != 0):
 						if(level == "committee"): 
-							print("User is commitee")
+							print("User {member.name} is commitee")
 							break
 						try:
 							roleID = str(roleIds[level])
 							userRoleIds = [role.id for role in member.roles]
 							serverRoles = {role.id : role for role in server.roles}
 							if(roleID not in userRoleIds):
-								log.LogMessage(f"Attempting to apply role {level}")
+								log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
 								await client.add_roles(member, serverRoles[roleID])
 						except Exception as e:
 							log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
