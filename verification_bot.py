@@ -278,7 +278,8 @@ async def on_message(message):
 	`!help` - gives this messsage
 	`!update` - (committee only) updates user info
 	`!email [email]` - this will send an email to that address with a verification code
-	`!verify [code]` - this will link that email to your discord account""")
+	`!verify [code]` - this will link that email to your discord account
+	`!gdpr` this will give you our gdpr policy""")
 					return
 				elif(command[0] == "gdpr"):
 					await client.send_message(message.channel, gdprMessage)
