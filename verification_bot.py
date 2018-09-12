@@ -321,7 +321,7 @@ async def on_message(message):
 					currentData[senderId] = {"email": emailHash.hexdigest(), "randomString": randomString}
 					text = GenerateEmailText(gmailUser, email, currentData[senderId]["randomString"])
 					await SendMail(gmailUser, gmailPw, email, text)
-					await client.send_message(message.channel, f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account")
+					await client.send_message(message.channel, f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account. Please send !gdpr to read our policy")
 					return
 				elif(command[0] == "verify"):
 					if(senderId not in currentData.keys()):
