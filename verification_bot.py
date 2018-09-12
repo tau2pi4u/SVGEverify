@@ -200,7 +200,11 @@ if(len(sys.argv) > 1):
 else:
 	log = logger()
 
-
+global gdprMessage
+gdprMessage = """We use your information to verify your membership status. By giving us your email address, you agree to us sending you a verification email where it will be stored.
+On the pi running the bot, the email is hashed and overwritten as soon as possible. We also store your unique discord ID on the pi and in a google drive spreadsheet.
+If you'd like these removed, please contact a committee member, however you will lose access to any discord based benefits of your membership status.
+You also agree to our privacy policy which can be found here: https://drive.google.com/file/d/1uGbnFqTkMdIOkDgjbhk3JkSL-c2jRaLe/view"""
 
 #databases
 global currentData
@@ -241,7 +245,9 @@ async def on_member_join(member):
 	`!email myemail@soton.ac.uk`.
 	You should then receive a code via email, which you can use to verify your account by sending:
 	`!verify [code]`.
-	This will give you access to student only areas as well as any perks given by your membership status.""")
+	This will give you access to student only areas as well as any perks given by your membership status.
+	GDPR information: 
+	%s""" % (gdprMessage))
 	log.LogMessage(f"Sent welcome message to user {member.name}\n")
 
 @client.event
@@ -273,6 +279,9 @@ async def on_message(message):
 	`!update` - (committee only) updates user info
 	`!email [email]` - this will send an email to that address with a verification code
 	`!verify [code]` - this will link that email to your discord account""")
+					return
+				elif(command[0] == "gdpr"):
+					await client.send_message(message.channel, gdprMessage)
 					return
 				elif(command[0] == "updateCount" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
 					await client.send_message(message.channel, f"There are currently {currentUpdates} pending updates")
@@ -307,6 +316,7 @@ async def on_message(message):
 						return
 					randomString = GenerateRandomString()
 					emailHash = hashlib.sha256(email.encode('utf-8'))
+					email = ""
 					currentData[senderId] = {"email": emailHash.hexdigest(), "randomString": randomString}
 					text = GenerateEmailText(gmailUser, email, currentData[senderId]["randomString"])
 					await SendMail(gmailUser, gmailPw, email, text)
