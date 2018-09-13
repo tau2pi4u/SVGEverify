@@ -262,10 +262,11 @@ async def on_ready():
 async def on_message(message):
 	if message.channel.is_private and message.author != client.user:
 		try:
-			log.LogMessage(f"Message received from user {message.author.name}")
+			log.LogMessage(f"Message received from user {message.author.name} ")
 			senderId = message.author.id
 			if(message.content[0] == '!'):
 				command = message.content[1:].split(' ')
+				log.LogMessage(f"Command: {command}\n")
 				if(command[0] == "update"): 
 					if (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner):
 						await UpdateMembershipInfo()
