@@ -163,8 +163,11 @@ async def MassMessageNonVerified():
 	server = client.get_server(svgeServer)
 	for member in server.members:
 		if(str(member.id) not in str(verified)):
-			log.LogMessage(f"Reminded {member.name}\n")
-			await client.send_message(member, "Hi, I'm the SVGE verification bot. You haven't yet verified your Southampton email with me. If you're a member of the university, please send `!email youremail@soton.ac.uk` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
+			try:
+				log.LogMessage(f"Reminded {member.name}\n")
+				await client.send_message(member, "Hi, I'm the SVGE verification bot. You haven't yet verified your Southampton email with me. If you're a member of the university, please send `!email youremail@soton.ac.uk` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
+			except Exception as e:
+				log.LogMessage(f"Failed to remind {member.name} for reason{e}\n")
 
 # Loads variables from a config file
 def LoadConfig(configPath):
@@ -302,6 +305,8 @@ async def on_message(message):
 					exit(0)
 				elif(command[0] == "remind" and message.author.id == owner):
 					await MassMessageNonVerified()
+					await client.send_message(message.channel, "Reminded users")
+					return
 				if(len(command) != 2):
 					await client.send_message(message.channel, f"Invalid command {command}")
 					return
