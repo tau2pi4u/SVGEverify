@@ -158,6 +158,14 @@ async def UpdateMembershipInfo():
 		return
 	
 
+async def MassMessageNonVerified():
+	verified = [member["id"] for hash, member in userInfo.items()]
+	server = client.get_server(svgeServer)
+	for member in server.members:
+		if(str(member.id) not in str(verified)):
+			log.LogMessage(f"Reminded {member.name}\n")
+			await client.send_message(member, "Hi, I'm the SVGE verification bot. You haven't yet verified your Southampton email with me. If you're a member of the university, please send `!email youremail@soton.ac.uk` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
+
 # Loads variables from a config file
 def LoadConfig(configPath):
 	#discord info
@@ -292,6 +300,8 @@ async def on_message(message):
 					log.LogMessage("Shutdown command given, goodbye")
 					client.close()
 					exit(0)
+				elif(command[0] == "remind" and message.author.id == owner):
+					await MassMessageNonVerified()
 				if(len(command) != 2):
 					await client.send_message(message.channel, f"Invalid command {command}")
 					return
