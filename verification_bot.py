@@ -8,6 +8,9 @@ import gspread
 from enum import Enum
 from oauth2client.service_account import ServiceAccountCredentials
 import sys
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+import asyncio
 
 
 # data logger class to produce text logs
@@ -28,18 +31,29 @@ def GenerateRandomString():
 
 # Generates email text 
 def GenerateEmailText(user, to, rand):
-	return """\
-From: %s
-To: %s
-Subject: SVGE Email Verification
+	msg = MIMEMultipart('alternative')
+	msg['Subject'] = "SVGE Email Verification"
+	msg['From'] = user
+	msg['To'] = to
 
-This is an automated email sent by the SVGEVerify bot. 
-If you did not request this then please ignore it and if you continue to receive them, please contact svge@soton.ac.uk
-Your verification code is:
-%s
-Please reply !verify %s to the bot
-
-SVGE""" % (user, to, rand, rand)
+	html = """\
+<html>
+	<head></head>
+	<body>
+		<p>This is an automated email sent by the SVGEVerify bot.<br>
+		If you did not request this then please ignore it and if you continue to receive them, please contact svge@soton.ac.uk<br>
+		Your verification code is:<br>
+		<b>%s</b><br>
+		Please reply <b>!verify %s</b> to the bot<br>
+		Kind regards,<br>
+		Southampton Video Games and Esports Society (SVGE)
+		</p>
+	</body>
+</html>""" % (rand, rand)
+	html = MIMEText(html, 'html')
+	msg.attach(html)
+	return msg.as_string()
+	
 
 # Logs into an smtp server, sends an email and then logs out
 async def SendMail(user, pw, to, text):
@@ -101,7 +115,6 @@ async def UpdateMembershipInfo():
 				backup.append_row([str(emailHash), str(info["id"]), int(info["level"])])
 		except Exception as e:
 			log.LogMessage(f"Failed to backup for reason {e}")
-
 		server = client.get_server(svgeServer)
 		idToHashMap = {str(info["id"]) : emailHash for emailHash, info in userInfo.items()}
 		for member in server.members:
@@ -153,6 +166,7 @@ async def UpdateMembershipInfo():
 							await client.remove_roles(member, serverRoles[roleID])
 					except Exception as e:
 						log.LogMessage(f"Failed to remove non guest roles for user {member.name} for reason {e}")
+		
 	except Exception as e:
 		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
 		return
@@ -277,7 +291,7 @@ async def on_message(message):
 			senderId = message.author.id
 			if(message.content[0] == '!'):
 				command = message.content[1:].split(' ')
-				log.LogMessage(f"Command: {command}\n")
+				log.LogMessage(f"Command: {command[0]}\n")
 				if(command[0] == "update"): 
 					if (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner):
 						await UpdateMembershipInfo()
