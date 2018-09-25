@@ -361,6 +361,7 @@ async def on_message(message):
 					trueCode = currentData[senderId]["randomString"]
 					if(inputCode == trueCode):
 						try:
+							await client.send_message(message.channel, "Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
 							await UpdateUserInfo(senderId, currentData[senderId]["email"])
 						except:
 							await client.send_message(message.channel, f"Something went wrong, please try again. If it continues to fail, please contact tau")
