@@ -12,6 +12,14 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import asyncio
 
+global emailWait
+emailWait = False
+
+global updateWait 
+updateWait = False
+
+global backupWait
+backupWait = False
 
 # data logger class to produce text logs
 class logger():
@@ -57,6 +65,10 @@ def GenerateEmailText(user, to, rand):
 
 # Logs into an smtp server, sends an email and then logs out
 async def SendMail(user, pw, to, text):
+	global emailWait
+	while emailWait:
+		await asyncio.sleep(1)
+	emailWait = True
 	try:  
 		server_ssl = smtplib.SMTP_SSL('smtp.gmail.com', 465)
 		server_ssl.ehlo()   # optional
@@ -68,16 +80,27 @@ async def SendMail(user, pw, to, text):
 		server_ssl.close()
 		log.LogMessage("Disconnected")
 		# ...send emails
+		emailWait = False
 	except Exception as e:  
 		log.LogMessage(f"Failed to send email with reason {e}")
+		emailWait = False
 
 # Updates the user info for a given user 
 async def UpdateUserInfo(userId, emailHash):
-	mLevel = membershipLevel.index("student")
-	if(emailHash in userInfo.keys()):
-		mLevel = max(mLevel, userInfo[emailHash]["level"])
-	userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
-	await UpdateMembershipInfo()
+	global updateWait
+	while updateWait:
+		await asyncio.sleep(1)
+	try:
+		updateWait = True
+		mLevel = membershipLevel.index("student")
+		if(emailHash in userInfo.keys()):
+			mLevel = max(mLevel, userInfo[emailHash]["level"])
+		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
+		#await UpdateMembershipInfo()
+		updateWait = False
+	except Exception as e:  
+		log.LogMessage(f"Failed to send email with reason {e}")
+		updateWait = False
 
 # Returns the membership level of a user
 def GetLevelFromUser(discordID):
@@ -95,6 +118,10 @@ def GetLevelFromString(levelString):
 
 # Updates the membership data for all members and backs up
 async def UpdateMembershipInfo():
+	global backupWait
+	while backupWait:
+		await asyncio.sleep(1)
+	backupWait = True
 	try:
 		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
 		creds = ServiceAccountCredentials.from_json_keyfile_name(clientSecret, scope)
@@ -166,8 +193,10 @@ async def UpdateMembershipInfo():
 							await client.remove_roles(member, serverRoles[roleID])
 					except Exception as e:
 						log.LogMessage(f"Failed to remove non guest roles for user {member.name} for reason {e}")
+			backupWait = False
 		
 	except Exception as e:
+		backupWait = False
 		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
 		return
 	
@@ -239,6 +268,8 @@ emailRequestsCount = {}
 global currentUpdates
 currentUpdates = 0
 
+
+
 try:
 	LoadConfig(sys.argv[2])
 except Exception as e:
@@ -258,6 +289,7 @@ client = discord.Client()
 @client.event
 async def on_member_join(member):
 	guestID = roleIds["guest"]
+	server = client.get_server(svgeServer)
 	userRoleIds = [role.id for role in member.roles]
 	serverRoles = {role.id : role for role in server.roles}
 	try: 
