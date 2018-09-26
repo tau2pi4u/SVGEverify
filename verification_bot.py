@@ -105,7 +105,7 @@ async def UpdateUserInfo(userId, emailHash):
 # Returns the membership level of a user
 def GetLevelFromUser(discordID):
 	for email, info in userInfo.items():
-		if(info["id"] == discordID):
+		if(str(info["id"]) == str(discordID)):
 			return info["level"]
 	return 0
 
