@@ -96,7 +96,7 @@ async def UpdateUserInfo(userId, emailHash):
 		if(emailHash in userInfo.keys()):
 			mLevel = max(mLevel, userInfo[emailHash]["level"])
 		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
-		#await UpdateMembershipInfo()
+		await UpdateMemberInfo(emailHash)
 		updateWait = False
 	except Exception as e:  
 		log.LogMessage(f"Failed to send email with reason {e}")
@@ -115,6 +115,41 @@ def GetLevelFromString(levelString):
 		return membershipLevel.index(levelString)
 	except:
 		return 0
+
+async def UpdateMemberInfo(emailHash):
+	try:
+		server = client.get_server(svgeServer)
+		member = server.get_member(userInfo[emailHash]["id"])
+		info = userInfo[emailHash]
+		for i, level in enumerate(membershipLevel[1:]):
+			if(info["level"] > i and info["id"] != 0):
+				if(level == "committee"): 
+					print(f"User {member.name} is commitee")
+					break
+				try:
+					roleID = str(roleIds[level])
+					userRoleIds = [role.id for role in member.roles]
+					serverRoles = {role.id : role for role in server.roles}
+					if(roleID not in userRoleIds):
+						log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
+						await client.add_roles(member, serverRoles[roleID])
+				except Exception as e:
+					log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
+			elif(info["id"] !=0):
+				if(level == "committee"): 
+					break
+				try:
+					roleID = str(roleIds[level])
+					userRoleIds = [role.id for role in member.roles]
+					serverRoles = {role.id : role for role in server.roles}
+					if(roleID in userRoleIds):
+						log.LogMessage(f"Attempting to remove role {level}")
+						await client.remove_roles(member, serverRoles[roleID])
+				except Exception as e:
+					log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
+	except Exception as e:
+		log.LogMessage(f"Failed to update member info for reason {e}\n")
+
 
 # Updates the membership data for all members and backs up
 async def UpdateMembershipInfo():
@@ -135,11 +170,10 @@ async def UpdateMembershipInfo():
 			else:
 				userInfo[hash] = {"level" : int(GetLevelFromString(row["level"])), "id": 0}
 		try:
-			backup = gClient.open("verify_backup").sheet1
-			backup.clear()
-			backup.append_row(['email_hash', 'id', 'level'])
+			backupCSV = "email_hash,id,level"
 			for emailHash, info in userInfo.items():
-				backup.append_row([str(emailHash), str(info["id"]), int(info["level"])])
+				backupCSV += f"\n{str(emailHash)},{str(info['id'])},{int(info['level'])}"
+			gClient.import_csv(sheetID, backupCSV)
 		except Exception as e:
 			log.LogMessage(f"Failed to backup for reason {e}")
 		server = client.get_server(svgeServer)
@@ -223,6 +257,8 @@ def LoadConfig(configPath):
 	#gmail info
 	global gmailUser
 	global gmailPw
+	#sheet info
+	global sheetID
 	config = {}
 	with open(configPath, "r") as configJson:
 		config = json.load(configJson)
@@ -233,6 +269,7 @@ def LoadConfig(configPath):
 	owner = config["owner"]
 	roleIds = config["discord"]["roleIds"]
 	membershipLevel = config["discord"]["membershipLevel"]
+	sheetID = config["sheets"]["backupID"]
 
 
 def LoadUsers():
