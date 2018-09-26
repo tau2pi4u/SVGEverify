@@ -121,6 +121,15 @@ async def UpdateMemberInfo(emailHash):
 		server = client.get_server(svgeServer)
 		member = server.get_member(userInfo[emailHash]["id"])
 		info = userInfo[emailHash]
+		serverRoles = {role.id : role for role in server.roles}
+		userRoleIds = [role.id for role in member.roles]
+		guestID = roleIds["guest"]
+		try: 
+			if(guestID in userRoleIds):
+				log.LogMessage(f"Attempting to apply role guest")
+				await client.remove_roles(member, serverRoles[guestID])
+		except Exception as e:
+			log.LogMessage(f"Failed to remove role guest with reason {e}")
 		for i, level in enumerate(membershipLevel[1:]):
 			if(info["level"] > i and info["id"] != 0):
 				if(level == "committee"): 
@@ -129,7 +138,6 @@ async def UpdateMemberInfo(emailHash):
 				try:
 					roleID = str(roleIds[level])
 					userRoleIds = [role.id for role in member.roles]
-					serverRoles = {role.id : role for role in server.roles}
 					if(roleID not in userRoleIds):
 						log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
 						await client.add_roles(member, serverRoles[roleID])
@@ -181,6 +189,14 @@ async def UpdateMembershipInfo():
 		for member in server.members:
 			if(str(member.id) in idToHashMap.keys()):
 				info = userInfo[idToHashMap[member.id]]
+				guestID = roleIds["guest"]
+				serverRoles = {role.id : role for role in server.roles}
+				try: 
+					if(guestID in userRoleIds):
+						log.LogMessage(f"Attempting to remove role guest")
+						await client.remove_roles(member, serverRoles[guestID])
+				except Exception as e:
+					log.LogMessage(f"Failed to remove role guest with reason {e}")
 				for i, level in enumerate(membershipLevel[1:]):
 					if(info["level"] > i and info["id"] != 0):
 						if(level == "committee"): 
@@ -189,7 +205,7 @@ async def UpdateMembershipInfo():
 						try:
 							roleID = str(roleIds[level])
 							userRoleIds = [role.id for role in member.roles]
-							serverRoles = {role.id : role for role in server.roles}
+							
 							if(roleID not in userRoleIds):
 								log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
 								await client.add_roles(member, serverRoles[roleID])
