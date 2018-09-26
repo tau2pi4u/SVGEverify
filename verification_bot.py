@@ -192,6 +192,7 @@ async def UpdateMembershipInfo():
 				guestID = roleIds["guest"]
 				serverRoles = {role.id : role for role in server.roles}
 				try: 
+					userRoleIds = [role.id for role in member.roles]
 					if(guestID in userRoleIds):
 						log.LogMessage(f"Attempting to remove role guest")
 						await client.remove_roles(member, serverRoles[guestID])
