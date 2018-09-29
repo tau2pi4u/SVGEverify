@@ -138,7 +138,8 @@ async def UpdateMemberInfo(emailHash):
 				try:
 					roleID = str(roleIds[level])
 					userRoleIds = [role.id for role in member.roles]
-					if(roleID not in userRoleIds):
+					mutedRoleId = roleIds["muted"]
+					if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
 						log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
 						await client.add_roles(member, serverRoles[roleID])
 				except Exception as e:
@@ -206,8 +207,8 @@ async def UpdateMembershipInfo():
 						try:
 							roleID = str(roleIds[level])
 							userRoleIds = [role.id for role in member.roles]
-							
-							if(roleID not in userRoleIds):
+							mutedRoleId = roleIds["muted"]
+							if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
 								log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
 								await client.add_roles(member, serverRoles[roleID])
 						except Exception as e:
@@ -389,9 +390,10 @@ async def on_message(message):
 					await client.send_message(message.channel, """Commands are: 
 	`!help` - gives this messsage
 	`!update` - (committee only) updates user info
-	`!email [email]` - this will send an email to that address with a verification code
-	`!verify [code]` - this will link that email to your discord account
-	`!gdpr` this will give you our gdpr policy""")
+	`!email [email]` - this will send an email to that address with a verification code (replace [email] with your valid Southampton email address)
+	`!verify [code]` - this will link that email to your discord account, where [code] is the code you were sent after using the !email command
+	`!gdpr` this will give you our gdpr policy
+	`!reset [userId]` - (committee only) resets a users email cap""")
 					return
 				elif(command[0] == "gdpr"):
 					await client.send_message(message.channel, gdprMessage)
@@ -410,6 +412,16 @@ async def on_message(message):
 				if(len(command) != 2):
 					await client.send_message(message.channel, f"Invalid command {command}")
 					return
+				if(command[0] == "reset"):
+					if(GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner):
+						if(command[1] in emailRequestsCount.keys()):
+							del emailRequestsCount[command[1]]
+							await client.send_message(message.channel, f"Reset user {command[1]}'s email count")
+							return
+						await client.send_message(message.channel, f"Did not find user {command[1]}")
+						return
+					await client.send_message(message.channel, f"You do not have permission to do this")
+					return
 				if(command[0] == "email"):
 					server = client.get_server(svgeServer)
 					if(message.author.id not in [user.id for user in server.members]):
@@ -421,7 +433,6 @@ async def on_message(message):
 					if(count > 3 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
 						await client.send_message(message.channel, f"You've made too many requests, please speak to a committee member to sort this out")
 						return
-					emailRequestsCount[senderId] = count + 1
 					email = command[1]
 					try:
 						domain = email.split('@')[1]
@@ -438,6 +449,7 @@ async def on_message(message):
 					await SendMail(gmailUser, gmailPw, email, text)
 					await client.send_message(message.channel, f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account. Please send !gdpr to read our policy")
 					email = ""
+					emailRequestsCount[senderId] = count + 1
 					return
 				elif(command[0] == "verify"):
 					if(senderId not in currentData.keys()):
