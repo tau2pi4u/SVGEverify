@@ -470,7 +470,7 @@ async def on_message(message):
 						await client.send_message(message.channel, "Sorry, that's not right. Please check the code you entered")
 					return
 
-				await client.send_message(message.channel, "Unrecognised command {command}")
+				await client.send_message(message.channel, f"Unrecognised command {command}")
 		except Exception as e:
 			log.LogMessage("Something went wrong with a command, error message: {e}")
 			await client.send_message(message.channel, "Something went wrong, please try again and if this persists, contact tau")
