@@ -95,6 +95,11 @@ async def UpdateUserInfo(userId, emailHash):
 		mLevel = membershipLevel.index("student")
 		if(emailHash in userInfo.keys()):
 			mLevel = max(mLevel, userInfo[emailHash]["level"])
+		if(emailHash in userInfo.keys()):
+			if(userInfo[emailHash]["level"] == -1):
+				log.LogMessage(f"User ID {userId} was previously banned")
+				updateWait = False
+				return
 		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
 		await UpdateMemberInfo(emailHash)
 		updateWait = False
@@ -175,7 +180,8 @@ async def UpdateMembershipInfo():
 		for row in data:
 			hash = hashlib.sha256(row["email"].encode('utf-8')).hexdigest()
 			if(hash in userInfo.keys()):
-				userInfo[hash]["level"] = int(GetLevelFromString(row["level"]))
+				if(userInfo[hash]["level"] != -1):
+					userInfo[hash]["level"] = int(GetLevelFromString(row["level"]))
 			else:
 				userInfo[hash] = {"level" : int(GetLevelFromString(row["level"])), "id": 0}
 		try:
@@ -302,6 +308,13 @@ def LoadUsers():
 	except Exception as e:
 		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
 	
+def banUser(userId):
+	idToHashMap = {str(info['id']): hash for hash, info in userInfo.items()}
+	if(userId not in idToHashMap.keys()):
+		return False
+	userInfo[idToHashMap[userId]]["level"] = -1
+	return true
+
 
 global log
 if(len(sys.argv) > 1):
@@ -469,7 +482,13 @@ async def on_message(message):
 					else:
 						await client.send_message(message.channel, "Sorry, that's not right. Please check the code you entered")
 					return
-
+				elif(command[0] == "ban" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
+					if(banUser(command[1])):
+						await client.send_message(message.channel, f"Banned user {command[1]}")
+					else:
+						await client.send_message(message.channel, f"Failed to ban user {command[1]}")
+					return
+					
 				await client.send_message(message.channel, f"Unrecognised command {command}")
 		except Exception as e:
 			log.LogMessage("Something went wrong with a command, error message: {e}")
