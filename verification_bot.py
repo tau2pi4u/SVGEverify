@@ -313,7 +313,7 @@ def banUser(userId):
 	if(userId not in idToHashMap.keys()):
 		return False
 	userInfo[idToHashMap[userId]]["level"] = -1
-	return true
+	return True
 
 
 global log
