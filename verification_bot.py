@@ -309,6 +309,8 @@ def LoadUsers():
 		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
 	
 def banUser(userId):
+	if(userId == "0"):
+		return False
 	idToHashMap = {str(info['id']): hash for hash, info in userInfo.items()}
 	if(userId not in idToHashMap.keys()):
 		return False
