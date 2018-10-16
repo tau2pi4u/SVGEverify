@@ -94,18 +94,20 @@ async def UpdateUserInfo(userId, emailHash):
 		updateWait = True
 		mLevel = membershipLevel.index("student")
 		if(emailHash in userInfo.keys()):
-			mLevel = max(mLevel, userInfo[emailHash]["level"])
+			return False
 		if(emailHash in userInfo.keys()):
 			if(userInfo[emailHash]["level"] == -1):
 				log.LogMessage(f"User ID {userId} was previously banned")
 				updateWait = False
-				return
+				return False
 		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
 		await UpdateMemberInfo(emailHash)
 		updateWait = False
+		return True
 	except Exception as e:  
 		log.LogMessage(f"Failed to send email with reason {e}")
 		updateWait = False
+		return False
 
 # Returns the membership level of a user
 def GetLevelFromUser(discordID):
@@ -317,6 +319,16 @@ def banUser(userId):
 	userInfo[idToHashMap[userId]]["level"] = -1
 	return True
 
+def unbanUser(userId):
+	if(userId == "0"):
+		return False
+	idToHashMap = {str(info['id']): hash for hash, info in userInfo.items()}
+	if(userId not in idToHashMap.keys()):
+		return False
+	if(userInfo[idToHashMap[userId]]["level"] < 0):
+		userInfo[idToHashMap[userId]]["level"] = 1
+		return True
+	return False
 
 global log
 if(len(sys.argv) > 1):
@@ -448,7 +460,7 @@ async def on_message(message):
 					if(count > 3 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
 						await client.send_message(message.channel, f"You've made too many requests, please speak to a committee member to sort this out")
 						return
-					email = command[1]
+					email = command[1].lower()
 					try:
 						domain = email.split('@')[1]
 					except:
@@ -475,7 +487,10 @@ async def on_message(message):
 					if(inputCode == trueCode):
 						try:
 							await client.send_message(message.channel, "Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
-							await UpdateUserInfo(senderId, currentData[senderId]["email"])
+							verified = await UpdateUserInfo(senderId, currentData[senderId]["email"])
+							if(not verified):
+								await client.send_message(message.channel, "You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
+								return
 						except:
 							await client.send_message(message.channel, f"Something went wrong, please try again. If it continues to fail, please contact tau")
 							return
@@ -489,6 +504,12 @@ async def on_message(message):
 						await client.send_message(message.channel, f"Banned user {command[1]}")
 					else:
 						await client.send_message(message.channel, f"Failed to ban user {command[1]}")
+					return
+				elif(command[0] == "unban" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
+					if(unbanUser(command[1])):
+						await client.send_message(message.channel, f"Unbanned user {command[1]}")
+					else:
+						await client.send_message(message.channel, f"Failed to unban user {command[1]}")
 					return
 					
 				await client.send_message(message.channel, f"Unrecognised command {command}")
