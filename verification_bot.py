@@ -93,7 +93,7 @@ async def UpdateUserInfo(userId, emailHash):
 	try:
 		updateWait = True
 		mLevel = membershipLevel.index("student")
-		if(emailHash in userInfo.keys()):
+		if(emailHash in userInfo.keys() and userInfo[emailHash]["id"] != 0):
 			return False
 		if(emailHash in userInfo.keys()):
 			if(userInfo[emailHash]["level"] == -1):
