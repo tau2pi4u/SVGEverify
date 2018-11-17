@@ -11,6 +11,7 @@ import sys
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import asyncio
+import time
 
 global emailWait
 emailWait = False
@@ -431,7 +432,6 @@ async def on_message(message):
 					await client.send_message(message.channel, "Shutting down, goodbye :wave:")
 					log.LogMessage("Shutdown command given, goodbye")
 					client.close()
-					exit(0)
 				elif(command[0] == "remind" and message.author.id == owner):
 					await MassMessageNonVerified()
 					await client.send_message(message.channel, "Reminded users")
@@ -517,8 +517,11 @@ async def on_message(message):
 			log.LogMessage("Something went wrong with a command, error message: {e}")
 			await client.send_message(message.channel, "Something went wrong, please try again and if this persists, contact tau")
 			
-
-client.run(discordToken)
+while True:
+	try:
+		client.loop.run_until_complete(client.start(discordToken))
+	except BaseException:
+		time.sleep(5)
 
 
 
