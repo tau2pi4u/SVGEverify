@@ -469,7 +469,7 @@ async def on_message(message):
 		try:
 			log.LogMessage(f"Message received from user {message.author.name} ")
 			senderId = message.author.id
-			if(message.content[0] == '*'):
+			if(message.content[0] == '!'):
 				command = message.content[1:].split(' ')
 				log.LogMessage(f"Command: {command[0]}\n")
 				if(command[0] == "update"): 
