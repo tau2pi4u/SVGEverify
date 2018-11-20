@@ -273,6 +273,69 @@ async def MassMessageNonVerified():
 			except Exception as e:
 				log.LogMessage(f"Failed to remind {member.name} for reason{e}\n")
 
+def CreateVote(msg):
+	voteTitle = msg[0] 
+	candidates = []
+	currentCandidate = ""
+	for s in msg[1:]:
+		if(s[-1] == ','):
+			currentCandidate += s[0:-1]
+			candidates.append(currentCandidate)
+			currentCandidate = ""
+		else:
+			currentCandidate += s + " "
+	candidates.append(currentCandidate[:-1])
+	votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": []}
+	return f"Created vote {voteTitle} with candidates {candidates}"
+
+def Vote(msg, id):
+	voteTitle = msg[0]
+	voteForU = ' '.join(msg[1:])
+	voteFor = voteForU.lower()
+	if(voteTitle in votes.keys()):
+		if(id in votes[voteTitle]["voterids"]):
+			return "You've already voted."
+		if(voteFor in votes[voteTitle]["candidates"].keys()):
+			votes[voteTitle]["candidates"][voteFor]["count"] += 1
+			votes[voteTitle]["voterids"].append(id)
+			return f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}."
+		else:
+			return f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?"
+	else:
+		return f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive."
+
+def EndVote(msg):
+	voteTitle = msg[0]
+	if(voteTitle in votes.keys()):
+		winnerName = []
+		winnerVotes = 0
+		res = f"There were {len(votes[voteTitle]['voterids'])} for the position of {voteTitle}.\n"
+		for candidate, info in votes[voteTitle]['candidates'].items():
+			candidateName = info["name"]
+			count = info["count"]
+			res += f"{candidateName}: {count}\n"
+			if(count > winnerVotes):
+				winnerName = [candidateName]
+				winnerVotes = count
+			elif(count == winnerVotes):
+				winnerName.append(candidateName)
+		if len(winnerName) == 1:
+			res += f"{winnerName} won with {winnerVotes} votes"
+		else:
+			res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
+		del votes[voteTitle]
+		return res
+	else:
+		return "Vote {voteTitle} does not exist"
+
+def GetVotes():
+	res = "Currently active votes:\n"
+	for title, info in votes.items():
+		candidates = ', '.join([candidate["name"] for candidate in info["candidates"].values()])
+		res += f"Vote: `{title}`\nCandidates: `{candidates}`\n\n"
+	return res
+
+
 # Loads variables from a config file
 def LoadConfig(configPath):
 	#discord info
@@ -350,6 +413,8 @@ global emailRequestsCount
 emailRequestsCount = {}
 global currentUpdates
 currentUpdates = 0
+global votes
+votes = {}
 
 
 
@@ -404,7 +469,7 @@ async def on_message(message):
 		try:
 			log.LogMessage(f"Message received from user {message.author.name} ")
 			senderId = message.author.id
-			if(message.content[0] == '!'):
+			if(message.content[0] == '*'):
 				command = message.content[1:].split(' ')
 				log.LogMessage(f"Command: {command[0]}\n")
 				if(command[0] == "update"): 
@@ -435,6 +500,18 @@ async def on_message(message):
 				elif(command[0] == "remind" and message.author.id == owner):
 					await MassMessageNonVerified()
 					await client.send_message(message.channel, "Reminded users")
+					return
+				elif(command[0] == "startvote" and message.author.id == owner):
+					await client.send_message(message.channel, CreateVote(command[1:]))
+					return
+				elif(command[0] == "endvote" and message.author.id == owner):
+					await client.send_message(message.channel, EndVote(command[1:]))
+					return
+				elif(command[0] == "votefor" and GetLevelFromUser(message.author.id) >= membershipLevel.index("member")):
+					await client.send_message(message.channel, Vote(command[1:], message.author.id))
+					return
+				elif(command[0] == "getvotes" and GetLevelFromUser(message.author.id) >= membershipLevel.index("member")):
+					await client.send_message(message.channel, GetVotes())
 					return
 				if(len(command) != 2):
 					await client.send_message(message.channel, f"Invalid command {command}")
@@ -511,11 +588,12 @@ async def on_message(message):
 					else:
 						await client.send_message(message.channel, f"Failed to unban user {command[1]}")
 					return
-					
+
+				
 				await client.send_message(message.channel, f"Unrecognised command {command}")
 		except Exception as e:
-			log.LogMessage("Something went wrong with a command, error message: {e}")
-			await client.send_message(message.channel, "Something went wrong, please try again and if this persists, contact tau")
+			log.LogMessage(f"Something went wrong with a command, error message: {e}")
+			await client.send_message(message.channel, f"Something went wrong, please try again and if this persists, contact tau")
 			
 while True:
 	try:
