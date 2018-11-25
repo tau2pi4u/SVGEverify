@@ -45,20 +45,8 @@ def GenerateEmailText(user, to, rand):
 	msg['From'] = user
 	msg['To'] = to
 
-	html = """\
-<html>
-	<head></head>
-	<body>
-		<p>This is an automated email sent by the SVGEVerify bot.<br>
-		If you did not request this then please ignore it and if you continue to receive them, please contact svge@soton.ac.uk<br>
-		Your verification code is:<br>
-		<b>%s</b><br>
-		Please reply <b>!verify %s</b> to the bot<br>
-		Kind regards,<br>
-		Southampton Video Games and Esports Society (SVGE)
-		</p>
-	</body>
-</html>""" % (rand, rand)
+	html = emailTemplate
+	html = html.replace("[code]", rand, 2)
 	html = MIMEText(html, 'html')
 	msg.attach(html)
 	return msg.as_string()
@@ -415,6 +403,10 @@ global currentUpdates
 currentUpdates = 0
 global votes
 votes = {}
+
+global emailTemplate
+with open("template.html", "r") as template:
+	emailTemplate = template.read()
 
 
 
