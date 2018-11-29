@@ -263,9 +263,10 @@ async def MassMessageNonVerified():
 
 def CreateVote(msg):
 	voteTitle = msg[0] 
+	voteChannel = msg[1]
 	candidates = []
 	currentCandidate = ""
-	for s in msg[1:]:
+	for s in msg[2:]:
 		if(s[-1] == ','):
 			currentCandidate += s[0:-1]
 			candidates.append(currentCandidate)
@@ -273,7 +274,7 @@ def CreateVote(msg):
 		else:
 			currentCandidate += s + " "
 	candidates.append(currentCandidate[:-1])
-	votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": []}
+	votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": [], "channelid": voteChannel}
 	return f"Created vote {voteTitle} with candidates {candidates}"
 
 def Vote(msg, id):
@@ -283,6 +284,10 @@ def Vote(msg, id):
 	if(voteTitle in votes.keys()):
 		if(id in votes[voteTitle]["voterids"]):
 			return "You've already voted."
+		channel = client.get_channel(votes[voteTitle]["channelid"])
+		validVoters = [member.id for member in channel.voice_members]
+		if(id not in validVoters):
+			return "You're not attending the relevant meeting"
 		if(voteFor in votes[voteTitle]["candidates"].keys()):
 			votes[voteTitle]["candidates"][voteFor]["count"] += 1
 			votes[voteTitle]["voterids"].append(id)
