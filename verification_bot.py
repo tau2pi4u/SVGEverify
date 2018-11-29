@@ -410,10 +410,8 @@ global votes
 votes = {}
 
 global emailTemplate
-with open("template.html", "r") as template:
+with open(str(sys.argv[4]), "r") as template:
 	emailTemplate = template.read()
-
-
 
 try:
 	LoadConfig(sys.argv[2])
