@@ -28,7 +28,7 @@ class logger():
 # Generates and returns a random 10 character string of letters, numbers and punctuation
 def GenerateRandomString():
 	N = 10 # number of characters
-	return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(N))
+	return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits) for _ in range(N))
 
 # Generates email text 
 def GenerateEmailText(user, to, rand):
@@ -92,7 +92,7 @@ def GetLevelFromString(levelString):
 
 async def UpdateMemberInfo(ctx, emailHash):
 	try:
-		guild = bot.get_guild(svgeGuild)
+		guild = bot.get_guild(societyGuild)
 		member = guild.get_member(userInfo[emailHash]["id"])
 		info = userInfo[emailHash]
 		guildRoles = {role.id : role for role in guild.roles}
@@ -155,7 +155,7 @@ async def UpdateMembershipInfo():
 			gClient.import_csv(sheetID, backupCSV)
 		except Exception as e:
 			log.LogMessage(f"Failed to backup for reason {e}")
-		guild = bot.get_guild(svgeGuild)
+		guild = bot.get_guild(societyGuild)
 		idToHashMap = {int(info["id"]) : emailHash for emailHash, info in userInfo.items()}
 		for member in guild.members:
 			if(member.id in idToHashMap.keys()):
@@ -222,7 +222,7 @@ async def UpdateMembershipInfo():
 
 async def MassMessageNonVerified(ctx):
 	verified = [member["id"] for hash, member in userInfo.items()]
-	guild = bot.get_guild(svgeGuild)
+	guild = bot.get_guild(societyGuild)
 	for member in guild.members:
 		if(int(member.id) not in int(verified)):
 			try:
@@ -231,7 +231,7 @@ async def MassMessageNonVerified(ctx):
 			except Exception as e:
 				log.LogMessage(f"Failed to remind {member.name} for reason{e}\n")
 
-def CreateVote(ctx, msg):
+async def CreateVote(ctx, msg):
 	try:
 		voteTitle = msg[0] 
 		voteChannel = msg[1]
@@ -245,35 +245,37 @@ def CreateVote(ctx, msg):
 			else:
 				currentCandidate += s + " "
 		candidates.append(currentCandidate[:-1])
-		votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": [], "channelid": voteChannel}
-		ctx.send(f"Created vote {voteTitle} with candidates {candidates}")
+		votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": [], "channelid": int(voteChannel)}
+		await ctx.send(f"Created vote {voteTitle} with candidates {candidates}")
 	except Exception as e:
-		ctx.send(f"Failed to create vote with reason {e}")
+		await ctx.send(f"Failed to create vote with reason {e}")
 
-def Vote(ctx, msg, id):
+async def Vote(ctx, msg, id):
 	try:
 		voteTitle = msg[0]
 		voteForU = ' '.join(msg[1:])
 		voteFor = voteForU.lower()
 		if(voteTitle in votes.keys()):
 			if(id in votes[voteTitle]["voterids"]):
-				ctx.send("You've already voted.")
+				await ctx.send("You've already voted.")
+				return
 			channel = bot.get_channel(votes[voteTitle]["channelid"])
-			validVoters = [member.id for member in channel.voice_members]
+			validVoters = [member.id for member in channel.members]
 			if(id not in validVoters):
-				ctx.send("You're not attending the relevant meeting")
+				await ctx.send("You're not attending the relevant meeting")
+				return
 			if(voteFor in votes[voteTitle]["candidates"].keys()):
 				votes[voteTitle]["candidates"][voteFor]["count"] += 1
 				votes[voteTitle]["voterids"].append(id)
-				ctx.send(f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}.")
+				await ctx.send(f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}.")
 			else:
-				ctx.send(f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?")
+				await ctx.send(f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?")
 		else:
-			ctx.send(f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive.")
+			await ctx.send(f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive.")
 	except Exception as e:
-		ctx.send("Something went wrong, please try again. If this persists, contact a committee member")
+		await ctx.send("Something went wrong, please try again. If this persists, contact a committee member")
 
-def EndVote(ctx, msg):
+async def EndVote(ctx, msg):
 	try:
 		voteTitle = msg[0]
 		if(voteTitle in votes.keys()):
@@ -294,18 +296,18 @@ def EndVote(ctx, msg):
 			else:
 				res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
 			del votes[voteTitle]
-			ctx.send(res)
+			await ctx.send(res)
 		else:
-			ctx.send(f"Vote {voteTitle} does not exist")
+			await ctx.send(f"Vote {voteTitle} does not exist")
 	except Exception as e:
-		ctx.send(f"Something went wrong - try again. Error: {e}")
+		await ctx.send(f"Something went wrong - try again. Error: {e}")
 
-def GetVotes(ctx):
+async def GetVotes(ctx):
 	res = "Currently active votes:\n"
 	for title, info in votes.items():
 		candidates = ', '.join([candidate["name"] for candidate in info["candidates"].values()])
 		res += f"Vote: `{title}`\nCandidates: `{candidates}`\n\n"
-	ctx.send(res)
+	await ctx.send(res)
 
 
 # Loads variables from a config file
@@ -316,7 +318,7 @@ def LoadConfig(configPath):
 	global societyName
 	#discord info
 	global discordToken
-	global svgeGuild
+	global societyGuild
 	global owner
 	global membershipLevel
 	global roleIds
@@ -331,7 +333,7 @@ def LoadConfig(configPath):
 	gmailUser = config["gmail"]["user"]
 	gmailPw = config["gmail"]["pw"]
 	discordToken = config["discord"]["token"]
-	svgeGuild = int(config["discord"]["server"])
+	societyGuild = int(config["discord"]["server"])
 	owner = config["owner"]
 	uniDomain = config["uni"]["domain"]
 	uniName = config["uni"]["name"]
@@ -418,7 +420,7 @@ bot = commands.Bot(command_prefix = '*')
 @bot.event
 async def on_member_join(member):
 	guestID = roleIds["guest"]
-	guild = bot.get_guild(svgeGuild)
+	guild = bot.get_guild(societyGuild)
 	userRoleIds = [role.id for role in member.roles]
 	guildRoles = {role.id : role for role in guild.roles}
 	try: 
@@ -452,7 +454,7 @@ async def on_message(msg):
 async def EmailCmd(ctx):
 	
 	try:
-		guild = bot.get_guild(svgeGuild)
+		guild = bot.get_guild(societyGuild)
 		userId = ctx.author.id
 		if(userId not in [user.id for user in guild.members]):
 			await ctx.send(f"You are not in the {societyName} server, please join before trying to verify")
@@ -465,15 +467,15 @@ async def EmailCmd(ctx):
 		try:
 			domain = email.split('@')[1]
 		except:
-			ctx.send(f"That wasn't a valid {uniName} email, please make sure to include {uniDomain}")
+			await ctx.send(f"That wasn't a valid {uniName} email, please make sure to include {uniDomain}")
 			return
 		if(domain != uniDomain):
-			ctx.send(f"Invalid domain {domain}, please make sure it's an {uniDomain} email address")
+			await ctx.send(f"Invalid domain {domain}, please make sure it's an {uniDomain} email address")
 			return
 		randomString = GenerateRandomString()
 		emailText = GenerateEmailText(gmailUser, email, randomString)
 		await SendMail(gmailUser, gmailPw, email, emailText)
-		emailHash = hashlib.sha256(email.encode('utf-8'))
+		emailHash = hashlib.sha256(email.encode('utf-8')).hexdigest()
 		currentData[userId] = {"email": emailHash, "randomString": randomString}
 		emailRequestsCount[userId] = count + 1
 		await ctx.send(f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account. By performing this command you agree to our GDPR policy. Please send !gdpr to read our policy.")
@@ -551,8 +553,8 @@ async def StartVoteCmd(ctx):
 		await ctx.send("You do not have permission to use this command")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1:]
-	CreateVote(ctx, inputCode)
+	input = ctx.message.content.split(commandStr)[1].split(' ')
+	await CreateVote(ctx, input)
 
 @bot.command(name = 'endvote', hidden = True)
 async def EndVoteCmd(ctx):
@@ -561,8 +563,8 @@ async def EndVoteCmd(ctx):
 		await ctx.send("You do not have permission to use this command")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1:]
-	EndVote(ctx, input)
+	input = ctx.message.content.split(commandStr)[1].split(' ')
+	await EndVote(ctx, input)
 
 @bot.command(name = 'votefor', help = f"{bot.command_prefix}votefor VoteTitle Candidate")
 async def VoteForCmd(ctx):
@@ -571,19 +573,19 @@ async def VoteForCmd(ctx):
 		ctx.send("You must be a member to vote")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1:]
-	Vote(ctx, input, ctx.author.id)
+	input = ctx.message.content.split(commandStr)[1].split(' ')
+	await Vote(ctx, input, ctx.author.id)
 
 @bot.command(name = 'getvotes', help = f"Prints current votes")
 async def VoteForCmd(ctx):
 	try:
 		userLevel = GetLevelFromUser(ctx.author.id)
 		if(userLevel < membershipLevel.index('member')):
-			ctx.send("You must be a member to vote")
+			await ctx.send("You must be a member to see votes")
 			return
-		GetVotes(ctx)
+		await GetVotes(ctx)
 	except Exception as e:
-		ctx.send("Something went wrong, please try again. If the problem persists, contact committee")
+		await ctx.send("Something went wrong, please try again. If the problem persists, contact committee")
 
 @bot.command(name = 'reset', hidden = True)
 async def ResetCmd(ctx):
