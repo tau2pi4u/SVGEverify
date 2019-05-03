@@ -688,7 +688,7 @@ async def EndVoteCmd(ctx):
 async def VoteForCmd(ctx):
 	userLevel = GetLevelFromUser(ctx.author.id)
 	if(userLevel < membershipLevel.index('member')):
-		ctx.send("You must be a member to vote")
+		await ctx.send("You must be a member to vote")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
 	input = ctx.message.content.split(commandStr)[1]
