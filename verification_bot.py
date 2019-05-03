@@ -13,6 +13,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 import asyncio
 import time
+from random import shuffle
+import operator
 
 # data logger class to produce text logs
 class logger():
@@ -233,74 +235,190 @@ async def MassMessageNonVerified(ctx):
 
 async def CreateVote(ctx, msg):
 	try:
-		voteTitle = msg[0] 
-		voteChannel = msg[1]
-		candidates = []
-		currentCandidate = ""
-		for s in msg[2:]:
-			if(s[-1] == ','):
-				currentCandidate += s[0:-1]
-				candidates.append(currentCandidate)
-				currentCandidate = ""
-			else:
-				currentCandidate += s + " "
-		candidates.append(currentCandidate[:-1])
-		votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": [], "channelid": int(voteChannel)}
-		await ctx.send(f"Created vote {voteTitle} with candidates {candidates}")
+		vote_opts=msg.split(',')
+		vote_cfg = {}
+		for opt in vote_opts:
+			opt_name, opt_val = opt.split('=')
+			opt_name, opt_val = opt_name.strip(), opt_val.strip()
+			vote_cfg[opt_name] = opt_val
+		assert(all(key in vote_cfg.keys() for key in ('name', 'candidates', 'type', 'roles'))), "CreateVote: Missing a required option"
+		assert(vote_cfg['type'] in ['fptp', 'ranked'])
+		if ':' not in vote_cfg['candidates']:
+			await ctx.send("No separator found in candidates")
+			return
+		vote_cfg['candidates'] = [c.strip() for c in vote_cfg['candidates'].split(':')]
+		vote_cfg['candidate_map'] = {c.lower() : c for c in vote_cfg['candidates']}
+		if ':' in vote_cfg['roles']:
+			vote_cfg['roles'] = [r.strip() for r in vote_cfg['roles'].split(':')]
+		else:
+			vote_cfg['roles'] = [vote_cfg['roles'].strip()]
+		if vote_cfg['type'] == 'fptp':
+			vote_cfg['voter_ids'] = []
+			vote_cfg['count'] = {}
+			for candidate in vote_cfg['candidates']:
+				vote_cfg['count'][candidate] = 0
+		else:
+			vote_cfg['voter_ids'] = []
+			vote_cfg['voter_rankings'] = []
+		if 'channel' in vote_cfg.keys():
+			vote_cfg['channel'] = int(vote_cfg['channel'])
+		votes[vote_cfg['name'].lower()] = vote_cfg
+		await ctx.send(f"Created vote {vote_cfg['name']} with candidates {vote_cfg['candidates']}")
 	except Exception as e:
-		await ctx.send(f"Failed to create vote with reason {e}")
+		await ctx.send("Failed to create vote, exception: {e}")
+	
+
+#async def Vote(ctx, msg, id):
+#	try:
+#		voteTitle = msg[0]
+#		voteForU = ' '.join(msg[1:])
+#		voteFor = voteForU.lower()
+#		if(voteTitle in votes.keys()):
+#			if(id in votes[voteTitle]["voterids"]):
+#				await ctx.send("You've already voted.")
+#				return
+#			channel = bot.get_channel(votes[voteTitle]["channelid"])
+#			validVoters = [member.id for member in channel.members]
+#			if(id not in validVoters):
+#				await ctx.send("You're not attending the relevant meeting")
+#				return
+#			if(voteFor in votes[voteTitle]["candidates"].keys()):
+#				votes[voteTitle]["candidates"][voteFor]["count"] += 1
+#				votes[voteTitle]["voterids"].append(id)
+#				await ctx.send(f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}.")
+#			else:
+#				await ctx.send(f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?")
+#		else:
+#			await ctx.send(f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive.")
+#	except Exception as e:
+#		await ctx.send("Something went wrong, please try again. If this persists, contact a committee member")
 
 async def Vote(ctx, msg, id):
 	try:
-		voteTitle = msg[0]
-		voteForU = ' '.join(msg[1:])
-		voteFor = voteForU.lower()
-		if(voteTitle in votes.keys()):
-			if(id in votes[voteTitle]["voterids"]):
-				await ctx.send("You've already voted.")
-				return
-			channel = bot.get_channel(votes[voteTitle]["channelid"])
-			validVoters = [member.id for member in channel.members]
-			if(id not in validVoters):
+		vote_title = msg.split(',')[0]
+		vote_candidates = msg.split(vote_title + ',')[1].strip()
+		vote_candidates = [vote_candidates.strip().lower()] if ',' not in vote_candidates else [candidate.strip().lower() for candidate in vote_candidates.split(',')]
+		vote_title = vote_title.lower().strip()
+		if(vote_title not in votes.keys()):
+			await ctx.send(f"{vote_title} is not a valid vote title")
+			return
+		vote_type = votes[vote_title]['type']
+		if('channel' in votes[vote_title].keys()):
+			channel = bot.get_channel(votes[vote_title]["channel"])
+			valid_voters = [member.id for member in channel.members]
+			if(id not in valid_voters):
 				await ctx.send("You're not attending the relevant meeting")
 				return
-			if(voteFor in votes[voteTitle]["candidates"].keys()):
-				votes[voteTitle]["candidates"][voteFor]["count"] += 1
-				votes[voteTitle]["voterids"].append(id)
-				await ctx.send(f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}.")
-			else:
-				await ctx.send(f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?")
+		if('roles' in votes[vote_title].keys()):
+			guild = bot.get_guild(societyGuild)
+			req_roles = [int(role) for role in votes[vote_title]['roles']]
+			voter_roles = [role.id for role in guild.roles if id in [user.id for user in role.members]]
+			if(not all(req_role in voter_roles for req_role in req_roles)):
+				await ctx.send("You are missing a required role.")
+				return
+		if vote_type == 'fptp':
+			if id in votes[vote_title]['voter_ids']:
+				await ctx.send(f"You have already participated in this vote.")
+				return
+			if len(vote_candidates) != 1:
+				await ctx.send(f"Please vote for exactly one candidate")
+				return
+			vote_candidates = vote_candidates[0]
+			if vote_candidates not in votes[vote_title]['candidate_map']:
+				await ctx.send(f"{vote_candidates} not found in candidate list: {vote[vote_title]['candidates']}\nNote: This is not case sensitive.")
+				return
+			votes[vote_title]['count'][votes[vote_title]['candidate_map'][vote_candidates]] += 1
+			votes[vote_title]['voter_ids'].append(id)
+			await ctx.send(f"You successfully voted for: {vote_candidates} in the vote: {vote_title}.")
 		else:
-			await ctx.send(f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive.")
+			if id in votes[vote_title]['voter_ids']:
+				await ctx.send(f"You have already participated in this vote.")
+				return
+			for candidate in vote_candidates:
+				if candidate not in votes[vote_title]['candidate_map']:
+					await ctx.send(f"{vote_candidates} not found in candidate list: {votes[vote_title]['candidates']}\nNote: This is not case sensitive.")
+					return
+			votes[vote_title]['voter_rankings'].append(vote_candidates)
+			votes[vote_title]['voter_ids'].append(id) 
+			shuffle(votes[vote_title]['voter_ids'])
+			await ctx.send(f"You successfully voted for: {vote_candidates} in the vote: {votes[vote_title]['name']}.")
 	except Exception as e:
-		await ctx.send("Something went wrong, please try again. If this persists, contact a committee member")
+		await ctx.send(f"Something went wrong, please try again. Error: {e}")
+
+#async def EndVote(ctx, msg):
+#	try:
+#		voteTitle = msg[0]
+#		if(voteTitle in votes.keys()):
+#			winnerName = []
+#			winnerVotes = 0
+#			res = f"There were {len(votes[voteTitle]['voterids'])} for the position of {voteTitle}.\n"
+#			for candidate, info in votes[voteTitle]['candidates'].items():
+#				candidateName = info["name"]
+#				count = info["count"]
+#				res += f"{candidateName}: {count}\n"
+#				if(count > winnerVotes):
+#					winnerName = [candidateName]
+#					winnerVotes = count
+#				elif(count == winnerVotes):
+#					winnerName.append(candidateName)
+#			if len(winnerName) == 1:
+#				res += f"{winnerName} won with {winnerVotes} votes"
+#			else:
+#				res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
+#			del votes[voteTitle]
+#			await ctx.send(res)
+#		else:
+#			await ctx.send(f"Vote {voteTitle} does not exist")
+#	except Exception as e:
+#		await ctx.send(f"Something went wrong - try again. Error: {e}")
 
 async def EndVote(ctx, msg):
 	try:
-		voteTitle = msg[0]
-		if(voteTitle in votes.keys()):
-			winnerName = []
-			winnerVotes = 0
-			res = f"There were {len(votes[voteTitle]['voterids'])} for the position of {voteTitle}.\n"
-			for candidate, info in votes[voteTitle]['candidates'].items():
-				candidateName = info["name"]
-				count = info["count"]
-				res += f"{candidateName}: {count}\n"
-				if(count > winnerVotes):
-					winnerName = [candidateName]
-					winnerVotes = count
-				elif(count == winnerVotes):
-					winnerName.append(candidateName)
-			if len(winnerName) == 1:
-				res += f"{winnerName} won with {winnerVotes} votes"
-			else:
-				res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
-			del votes[voteTitle]
-			await ctx.send(res)
+		vote_title = msg.strip().lower()
+		if vote_title not in votes.keys():
+			await ctx.send(f"{vote_title} not a valid vote")
+		vote_cfg = votes[vote_title]
+		vote_type = vote_cfg['type']
+		if vote_type == 'fptp':
+			result = dict(sorted(vote_cfg['count'].items(), key=operator.itemgetter(1), reverse=True))
+			await ctx.send(f"Results for vote: {vote_cfg['name']}\n{result}")
+			del votes[vote_title]
+			return
 		else:
-			await ctx.send(f"Vote {voteTitle} does not exist")
+			rankings = vote_cfg['voter_rankings']
+			# fix to be in line with candidate name in dictionary
+			for i, voter_rank in enumerate(rankings):
+				rankings[i] = [vote_cfg['candidate_map'][c.lower()] for c in rankings[i]]			
+			round = 0
+			candidate_list = vote_cfg['candidates']
+			while len(candidate_list) > 1:
+				round_votes = {candidate: 0 for candidate in candidate_list}
+				for voter in rankings:
+					if len(voter) == 0:
+						continue
+					first_choice = voter[0]
+					round_votes[first_choice] += 1
+				round_result = dict(sorted(round_votes.items(), key=operator.itemgetter(1), reverse=True))
+				total_votes = sum(round_votes.values())
+				top_perc = 100.0 * list(round_result.values())[0] / total_votes
+				if(top_perc > 50.0):
+					winner = list(round_result.keys())[0]
+					await ctx.send(f"Vote was won by {winner} with {top_perc:.2f}% of the vote.\nFinal result: {round_result}")
+					del votes[vote_title]
+					return
+				else:
+					if len(candidate_list) == 2:
+						break
+					last_place = list(round_result.keys())[-1]
+					candidate_list.remove(last_place)
+					for i in range(len(rankings)):
+						if last_place in rankings[i]:
+							rankings[i].remove(last_place)
+					await ctx.send(f"Round results: {round_result}\nRemoved candidate: {last_place}")
+			await ctx.send(f"Exited without a majority. Remaining vote list: {rankings}")
+			del votes[vote_title]
 	except Exception as e:
-		await ctx.send(f"Something went wrong - try again. Error: {e}")
+		await ctx.send(f"Something went wrong, please try again. Error: {e}")
 
 async def GetVotes(ctx):
 	res = "Currently active votes:\n"
@@ -553,7 +671,7 @@ async def StartVoteCmd(ctx):
 		await ctx.send("You do not have permission to use this command")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1].split(' ')
+	input = ctx.message.content.split(commandStr)[1]
 	await CreateVote(ctx, input)
 
 @bot.command(name = 'endvote', hidden = True)
@@ -563,7 +681,7 @@ async def EndVoteCmd(ctx):
 		await ctx.send("You do not have permission to use this command")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1].split(' ')
+	input = ctx.message.content.split(commandStr)[1]
 	await EndVote(ctx, input)
 
 @bot.command(name = 'votefor', help = f"{bot.command_prefix}votefor VoteTitle Candidate")
@@ -573,11 +691,11 @@ async def VoteForCmd(ctx):
 		ctx.send("You must be a member to vote")
 		return
 	commandStr = bot.command_prefix + ctx.command.name + ' '
-	input = ctx.message.content.split(commandStr)[1].split(' ')
+	input = ctx.message.content.split(commandStr)[1]
 	await Vote(ctx, input, ctx.author.id)
 
 @bot.command(name = 'getvotes', help = f"Prints current votes")
-async def VoteForCmd(ctx):
+async def GetVotesCmd(ctx):
 	try:
 		userLevel = GetLevelFromUser(ctx.author.id)
 		if(userLevel < membershipLevel.index('member')):
