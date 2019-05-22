@@ -15,17 +15,10 @@ import asyncio
 import time
 from random import shuffle
 import operator
+import logging
 
-# data logger class to produce text logs
-class logger():
-	def __init__(self, path = 'log.txt'):
-		self.log = open(path, "w")
-	def LogMessage(self, message):
-		try:
-			self.log.write(f"{message}\n")
-		except:
-			self.log.write("Invalid log message input\n")
-		print(message)
+
+logging.basicConfig(filename='log.txt', level = logging.INFO)
 
 # Generates and returns a random 10 character string of letters, numbers and punctuation
 def GenerateRandomString():
@@ -50,16 +43,16 @@ async def SendMail(user, pw, to, text):
 	try:  
 		server_ssl = smtplib.SMTP_SSL('smtp.gmail.com', 465)
 		server_ssl.ehlo()   # optional
-		log.LogMessage(f"Connected to {user}")
+		logging.info(f"Connected to {user}")
 		server_ssl.login(user, pw)
-		log.LogMessage("Login successful")
+		logging.info("Login successful")
 		server_ssl.sendmail(user, to, text)
-		log.LogMessage(f"Sent message")
+		logging.info(f"Sent message")
 		server_ssl.close()
-		log.LogMessage("Disconnected")
+		logging.info("Disconnected")
 		# ...send emails
 	except Exception as e:  
-		log.LogMessage(f"Failed to send email with reason {e}")
+		logging.warning(f"Failed to send email with reason {e}")
 
 # Updates the user info for a given user 
 async def UpdateUserInfo(ctx, userId, emailHash):
@@ -69,13 +62,13 @@ async def UpdateUserInfo(ctx, userId, emailHash):
 			return False
 		if(emailHash in userInfo.keys()):
 			if(userInfo[emailHash]["level"] == -1):
-				log.LogMessage(f"User ID {userId} was previously banned")
+				logging.info(f"User ID {userId} was previously banned")
 				return False
 		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
 		await UpdateMemberInfo(ctx, emailHash)
 		return True
 	except Exception as e:  
-		log.LogMessage(f"Failed update user info with reason {e}")
+		logging.warning(f"Failed update user info with reason {e}")
 		return False
 
 # Returns the membership level of a user
@@ -102,10 +95,10 @@ async def UpdateMemberInfo(ctx, emailHash):
 		guestID = roleIds["guest"]
 		try: 
 			if(guestID in userRoleIds):
-				log.LogMessage(f"Attempting to remove role guest")
+				logging.info(f"Attempting to remove role guest")
 				await member.remove_roles(guildRoles[guestID])
 		except Exception as e:
-			log.LogMessage(f"Failed to remove role guest with reason {e}")
+			logging.warning(f"Failed to remove role guest with reason {e}")
 		for i, level in enumerate(membershipLevel[1:]):
 			if(info["level"] > i and info["id"] != 0):
 				if(i == "committee"): 
@@ -116,10 +109,10 @@ async def UpdateMemberInfo(ctx, emailHash):
 					userRoleIds = [role.id for role in member.roles]
 					mutedRoleId = roleIds["muted"]
 					if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
-						log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
+						logging.info(f"Attempting to apply role {level} to user {member.name}")
 						await member.add_roles(guildRoles[roleID])
 				except Exception as e:
-					log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
+					logging.warning(f"Failed to add role {level} to user {member.name} for reason {e}")
 			elif(info["id"] !=0):
 				if(i == "committee"): 
 					break
@@ -127,12 +120,12 @@ async def UpdateMemberInfo(ctx, emailHash):
 					roleID = int(roleIds[level])
 					userRoleIds = [role.id for role in member.roles]
 					if(roleID in userRoleIds):
-						log.LogMessage(f"Attempting to remove role {level}")
+						logging.info(f"Attempting to remove role {level}")
 						await member.remove_roles(guildRoles[roleID])
 				except Exception as e:
-					log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
+					logging.warning(f"Failed to remove role {level} from user {member.name} for reason {e}")
 	except Exception as e:
-		log.LogMessage(f"Failed to update member info for reason {e}\n")
+		logging.warning(f"Failed to update member info for reason {e}\n")
 
 
 # Updates the membership data for all members and backs up
@@ -156,7 +149,7 @@ async def UpdateMembershipInfo():
 				backupCSV += f"\n{str(emailHash)},{int(info['id'])},{int(info['level'])}"
 			gClient.import_csv(sheetID, backupCSV)
 		except Exception as e:
-			log.LogMessage(f"Failed to backup for reason {e}")
+			logging.warning(f"Failed to backup for reason {e}")
 		guild = bot.get_guild(societyGuild)
 		idToHashMap = {int(info["id"]) : emailHash for emailHash, info in userInfo.items()}
 		for member in guild.members:
@@ -167,10 +160,10 @@ async def UpdateMembershipInfo():
 				try: 
 					userRoleIds = [role.id for role in member.roles]
 					if(guestID in userRoleIds):
-						log.LogMessage(f"Attempting to remove role guest")
+						logging.info(f"Attempting to remove role guest")
 						await member.remove_roles(guildRoles[guestID])
 				except Exception as e:
-					log.LogMessage(f"Failed to remove role guest with reason {e}")
+					logging.warning(f"Failed to remove role guest with reason {e}")
 				for i, level in enumerate(membershipLevel[1:]):
 					if(info["level"] > i and info["id"] != 0):
 						if(level == "committee"): 
@@ -181,10 +174,10 @@ async def UpdateMembershipInfo():
 							userRoleIds = [role.id for role in member.roles]
 							mutedRoleId = roleIds["muted"]
 							if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
-								log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
+								logging.info(f"Attempting to apply role {level} to user {member.name}")
 								await member.add_roles(guildRoles[roleID])
 						except Exception as e:
-							log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
+							logging.warning(f"Failed to add role {level} to user {member.name} for reason {e}")
 					elif(info["id"] !=0):
 						if(level == "committee"): 
 							break
@@ -192,33 +185,33 @@ async def UpdateMembershipInfo():
 							roleID = int(roleIds[level])
 							userRoleIds = [role.id for role in member.roles]
 							if(roleID in userRoleIds):
-								log.LogMessage(f"Attempting to remove role {level}")
+								logging.info(f"Attempting to remove role {level}")
 								await member.remove_roles(guildRoles[roleID])
 						except Exception as e:
-							log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
+							logging.warning(f"Failed to remove role {level} from user {member.name} for reason {e}")
 			elif not member.bot:
 				guestID = roleIds["guest"]
 				userRoleIds = [role.id for role in member.roles]
 				guildRoles = {role.id : role for role in guild.roles}
 				try: 
 					if(guestID not in userRoleIds):
-						log.LogMessage(f"Attempting to apply role guest")
+						logging.info(f"Attempting to apply role guest")
 						await member.add_roles(guildRoles[guestID])
 				except Exception as e:
-					log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
+					logging.warning(f"Failed to add guest role for {member.name} for reason {e}")
 				for i, level in enumerate(membershipLevel[1:]):
 					if(level == "committee"):
 						break
 					roleID = roleIds[level]
 					try: 
 						if(roleID in userRoleIds):
-							log.LogMessage(f"Attempting to apply role {level}")
+							logging.info(f"Attempting to apply role {level}")
 							await member.remove_roles(guildRoles[roleID])
 					except Exception as e:
-						log.LogMessage(f"Failed to remove non guest roles for user {member.name} for reason {e}")
+						logging.warning(f"Failed to remove non guest roles for user {member.name} for reason {e}")
 		
 	except Exception as e:
-		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
+		logging.warning(f"Failed to authorise with gmail with reason {e}")
 		return
 	
 
@@ -228,10 +221,10 @@ async def MassMessageNonVerified(ctx):
 	for member in guild.members:
 		if(int(member.id) not in int(verified)):
 			try:
-				log.LogMessage(f"Reminded {member.name}\n")
+				logging.info(f"Reminded {member.name}\n")
 				await member.send(f"Hi, I'm the {societyName} verification bot. You haven't yet verified your {uniName} email with me. If you're a member of the university, please send `!email youremail@{uniDomain}` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
 			except Exception as e:
-				log.LogMessage(f"Failed to remind {member.name} for reason{e}\n")
+				logging.warning(f"Failed to remind {member.name} for reason{e}\n")
 
 async def CreateVote(ctx, msg):
 	try:
@@ -267,31 +260,6 @@ async def CreateVote(ctx, msg):
 	except Exception as e:
 		await ctx.send("Failed to create vote, exception: {e}")
 	
-
-#async def Vote(ctx, msg, id):
-#	try:
-#		voteTitle = msg[0]
-#		voteForU = ' '.join(msg[1:])
-#		voteFor = voteForU.lower()
-#		if(voteTitle in votes.keys()):
-#			if(id in votes[voteTitle]["voterids"]):
-#				await ctx.send("You've already voted.")
-#				return
-#			channel = bot.get_channel(votes[voteTitle]["channelid"])
-#			validVoters = [member.id for member in channel.members]
-#			if(id not in validVoters):
-#				await ctx.send("You're not attending the relevant meeting")
-#				return
-#			if(voteFor in votes[voteTitle]["candidates"].keys()):
-#				votes[voteTitle]["candidates"][voteFor]["count"] += 1
-#				votes[voteTitle]["voterids"].append(id)
-#				await ctx.send(f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}.")
-#			else:
-#				await ctx.send(f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?")
-#		else:
-#			await ctx.send(f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive.")
-#	except Exception as e:
-#		await ctx.send("Something went wrong, please try again. If this persists, contact a committee member")
 
 async def Vote(ctx, msg, id):
 	try:
@@ -344,33 +312,6 @@ async def Vote(ctx, msg, id):
 			await ctx.send(f"You successfully voted for: {vote_candidates} in the vote: {votes[vote_title]['name']}.")
 	except Exception as e:
 		await ctx.send(f"Something went wrong, please try again. Error: {e}")
-
-#async def EndVote(ctx, msg):
-#	try:
-#		voteTitle = msg[0]
-#		if(voteTitle in votes.keys()):
-#			winnerName = []
-#			winnerVotes = 0
-#			res = f"There were {len(votes[voteTitle]['voterids'])} for the position of {voteTitle}.\n"
-#			for candidate, info in votes[voteTitle]['candidates'].items():
-#				candidateName = info["name"]
-#				count = info["count"]
-#				res += f"{candidateName}: {count}\n"
-#				if(count > winnerVotes):
-#					winnerName = [candidateName]
-#					winnerVotes = count
-#				elif(count == winnerVotes):
-#					winnerName.append(candidateName)
-#			if len(winnerName) == 1:
-#				res += f"{winnerName} won with {winnerVotes} votes"
-#			else:
-#				res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
-#			del votes[voteTitle]
-#			await ctx.send(res)
-#		else:
-#			await ctx.send(f"Vote {voteTitle} does not exist")
-#	except Exception as e:
-#		await ctx.send(f"Something went wrong - try again. Error: {e}")
 
 async def EndVote(ctx, msg):
 	try:
@@ -471,7 +412,7 @@ def LoadUsers():
 		data = sheet.get_all_records()
 		userInfo = {row["email_hash"] : {"id" : int(row["id"]), "level" : int(row["level"])} for row in data}
 	except Exception as e:
-		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
+		logging.warning(f"Failed to authorise with gmail with reason {e}")
 	
 def banUser(userId):
 	if(userId == "0"):
@@ -492,12 +433,6 @@ def unbanUser(userId):
 		userInfo[idToHashMap[userId]]["level"] = 1
 		return True
 	return False
-
-global log
-if(len(sys.argv) > 1):
-	log = logger(sys.argv[1])
-else:
-	log = logger()
 
 global gdprMessage
 gdprMessage = """We use your information to verify your membership status. By giving us your email address, you agree to us sending you a verification email and processing it for the purpose of this bot.
@@ -522,7 +457,7 @@ with open(str(sys.argv[4]), "r") as template:
 try:
 	LoadConfig(sys.argv[2])
 except Exception as e:
-	log.LogMessage(f"Failed to load config with reason {e}")
+	logging.warning(f"Failed to load config with reason {e}")
 	sys.exit(1)
 
 global clientSecret
@@ -531,7 +466,7 @@ clientSecret = sys.argv[3]
 try:
 	LoadUsers()
 except Exception as e:
-	log.LogMessage(f"Failed to read user_info.json, error\n{e}")
+	logging.warning(f"Failed to read user_info.json, error\n{e}")
 
 bot = commands.Bot(command_prefix = '*')
 
@@ -543,25 +478,25 @@ async def on_member_join(member):
 	guildRoles = {role.id : role for role in guild.roles}
 	try: 
 		if(guestID not in userRoleIds):
-			log.LogMessage(f"Attempting to apply role guest")
+			logging.info(f"Attempting to apply role guest")
 			await member.add_roles(guildRoles[guestID])
 	except Exception as e:
-		log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
-	await member.send_message(f"""Welcome to the {soceityName} discord server! If you are a student, please verify this by sending:
+		logging.warning(f"Failed to add guest role for {member.name} for reason {e}")
+	await member.send_message(f"""Welcome to the {societyName} discord server! If you are a student, please verify this by sending:
 	`!email myemail@{uniDomain}`.
 	You should then receive a code via email, which you can use to verify your account by sending:
 	`!verify [code]`.
 	This will give you access to student only areas as well as any perks given by your membership status.
 	GDPR information: 
 	%s""" % (gdprMessage))
-	log.LogMessage(f"Sent welcome message to user {member.name}\n")
+	logging.info(f"Sent welcome message to user {member.name}\n")
 
 @bot.event
 async def on_ready():
-	log.LogMessage('Logged in as')
-	log.LogMessage(bot.user.name)
-	log.LogMessage(bot.user.id)
-	log.LogMessage('------')
+	logging.info('Logged in as')
+	logging.info(bot.user.name)
+	logging.info(bot.user.id)
+	logging.info('------')
 
 @bot.event
 async def on_message(msg):
