@@ -1,601 +1,265 @@
 import discord
-import smtplib
-import random
-import string
-import json
+from discord.ext import commands
 import hashlib
-import gspread
 from enum import Enum
-from oauth2client.service_account import ServiceAccountCredentials
 import sys
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText
 import asyncio
 import time
+import logging
+import utils.mail 
+import utils.guild 
+import utils.voting
+import utils.config
+import argparse
 
-global emailWait
-emailWait = False
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", "--config", default="config.cfg")
+args = parser.parse_args()
 
-global updateWait 
-updateWait = False
-
-global backupWait
-backupWait = False
-
-# data logger class to produce text logs
-class logger():
-	def __init__(self, path = 'log.txt'):
-		self.log = open(path, "w")
-	def LogMessage(self, message):
-		try:
-			self.log.write(f"{message}\n")
-		except:
-			self.log.write("Invalid log message input\n")
-		print(message)
-
-# Generates and returns a random 10 character string of letters, numbers and punctuation
-def GenerateRandomString():
-	N = 10 # number of characters
-	return ''.join(random.SystemRandom().choice(string.ascii_letters + string.digits + string.punctuation) for _ in range(N))
-
-# Generates email text 
-def GenerateEmailText(user, to, rand):
-	msg = MIMEMultipart('alternative')
-	msg['Subject'] = "SVGE Email Verification"
-	msg['From'] = user
-	msg['To'] = to
-
-	html = emailTemplate
-	html = html.replace("[code]", rand, 2)
-	html = MIMEText(html, 'html')
-	msg.attach(html)
-	return msg.as_string()
-	
-
-# Logs into an smtp server, sends an email and then logs out
-async def SendMail(user, pw, to, text):
-	global emailWait
-	while emailWait:
-		await asyncio.sleep(1)
-	emailWait = True
-	try:  
-		server_ssl = smtplib.SMTP_SSL('smtp.gmail.com', 465)
-		server_ssl.ehlo()   # optional
-		log.LogMessage(f"Connected to {user}")
-		server_ssl.login(user, pw)
-		log.LogMessage("Login successful")
-		server_ssl.sendmail(user, to, text)
-		log.LogMessage(f"Sent message")
-		server_ssl.close()
-		log.LogMessage("Disconnected")
-		# ...send emails
-		emailWait = False
-	except Exception as e:  
-		log.LogMessage(f"Failed to send email with reason {e}")
-		emailWait = False
-
-# Updates the user info for a given user 
-async def UpdateUserInfo(userId, emailHash):
-	global updateWait
-	while updateWait:
-		await asyncio.sleep(1)
-	try:
-		updateWait = True
-		mLevel = membershipLevel.index("student")
-		if(emailHash in userInfo.keys() and userInfo[emailHash]["id"] != 0):
-			return False
-		if(emailHash in userInfo.keys()):
-			if(userInfo[emailHash]["level"] == -1):
-				log.LogMessage(f"User ID {userId} was previously banned")
-				updateWait = False
-				return False
-		userInfo[emailHash] = {"id" : userId, "level" : int(mLevel)}
-		await UpdateMemberInfo(emailHash)
-		updateWait = False
-		return True
-	except Exception as e:  
-		log.LogMessage(f"Failed to send email with reason {e}")
-		updateWait = False
-		return False
-
-# Returns the membership level of a user
-def GetLevelFromUser(discordID):
-	for email, info in userInfo.items():
-		if(str(info["id"]) == str(discordID)):
-			return info["level"]
-	return 0
-
-# Returns the membership level integer value of a given role string
-def GetLevelFromString(levelString):
-	try:
-		return membershipLevel.index(levelString)
-	except:
-		return 0
-
-async def UpdateMemberInfo(emailHash):
-	try:
-		server = client.get_server(svgeServer)
-		member = server.get_member(userInfo[emailHash]["id"])
-		info = userInfo[emailHash]
-		serverRoles = {role.id : role for role in server.roles}
-		userRoleIds = [role.id for role in member.roles]
-		guestID = roleIds["guest"]
-		try: 
-			if(guestID in userRoleIds):
-				log.LogMessage(f"Attempting to apply role guest")
-				await client.remove_roles(member, serverRoles[guestID])
-		except Exception as e:
-			log.LogMessage(f"Failed to remove role guest with reason {e}")
-		for i, level in enumerate(membershipLevel[1:]):
-			if(info["level"] > i and info["id"] != 0):
-				if(level == "committee"): 
-					print(f"User {member.name} is commitee")
-					break
-				try:
-					roleID = str(roleIds[level])
-					userRoleIds = [role.id for role in member.roles]
-					mutedRoleId = roleIds["muted"]
-					if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
-						log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
-						await client.add_roles(member, serverRoles[roleID])
-				except Exception as e:
-					log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
-			elif(info["id"] !=0):
-				if(level == "committee"): 
-					break
-				try:
-					roleID = str(roleIds[level])
-					userRoleIds = [role.id for role in member.roles]
-					serverRoles = {role.id : role for role in server.roles}
-					if(roleID in userRoleIds):
-						log.LogMessage(f"Attempting to remove role {level}")
-						await client.remove_roles(member, serverRoles[roleID])
-				except Exception as e:
-					log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
-	except Exception as e:
-		log.LogMessage(f"Failed to update member info for reason {e}\n")
-
-
-# Updates the membership data for all members and backs up
-async def UpdateMembershipInfo():
-	global backupWait
-	while backupWait:
-		await asyncio.sleep(1)
-	backupWait = True
-	try:
-		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-		creds = ServiceAccountCredentials.from_json_keyfile_name(clientSecret, scope)
-		gClient = gspread.authorize(creds)
-		sheet = gClient.open("member_data").sheet1
-		data = sheet.get_all_records()
-		for row in data:
-			hash = hashlib.sha256(row["email"].encode('utf-8')).hexdigest()
-			if(hash in userInfo.keys()):
-				if(userInfo[hash]["level"] != -1):
-					userInfo[hash]["level"] = int(GetLevelFromString(row["level"]))
-			else:
-				userInfo[hash] = {"level" : int(GetLevelFromString(row["level"])), "id": 0}
-		try:
-			backupCSV = "email_hash,id,level"
-			for emailHash, info in userInfo.items():
-				backupCSV += f"\n{str(emailHash)},{str(info['id'])},{int(info['level'])}"
-			gClient.import_csv(sheetID, backupCSV)
-		except Exception as e:
-			log.LogMessage(f"Failed to backup for reason {e}")
-		server = client.get_server(svgeServer)
-		idToHashMap = {str(info["id"]) : emailHash for emailHash, info in userInfo.items()}
-		for member in server.members:
-			if(str(member.id) in idToHashMap.keys()):
-				info = userInfo[idToHashMap[member.id]]
-				guestID = roleIds["guest"]
-				serverRoles = {role.id : role for role in server.roles}
-				try: 
-					userRoleIds = [role.id for role in member.roles]
-					if(guestID in userRoleIds):
-						log.LogMessage(f"Attempting to remove role guest")
-						await client.remove_roles(member, serverRoles[guestID])
-				except Exception as e:
-					log.LogMessage(f"Failed to remove role guest with reason {e}")
-				for i, level in enumerate(membershipLevel[1:]):
-					if(info["level"] > i and info["id"] != 0):
-						if(level == "committee"): 
-							print(f"User {member.name} is commitee")
-							break
-						try:
-							roleID = str(roleIds[level])
-							userRoleIds = [role.id for role in member.roles]
-							mutedRoleId = roleIds["muted"]
-							if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
-								log.LogMessage(f"Attempting to apply role {level} to user {member.name}")
-								await client.add_roles(member, serverRoles[roleID])
-						except Exception as e:
-							log.LogMessage(f"Failed to add role {level} to user {member.name} for reason {e}")
-					elif(info["id"] !=0):
-						if(level == "committee"): 
-							break
-						try:
-							roleID = str(roleIds[level])
-							userRoleIds = [role.id for role in member.roles]
-							serverRoles = {role.id : role for role in server.roles}
-							if(roleID in userRoleIds):
-								log.LogMessage(f"Attempting to remove role {level}")
-								await client.remove_roles(member, serverRoles[roleID])
-						except Exception as e:
-							log.LogMessage(f"Failed to remove role {level} from user {member.name} for reason {e}")
-			elif not member.bot:
-				guestID = roleIds["guest"]
-				userRoleIds = [role.id for role in member.roles]
-				serverRoles = {role.id : role for role in server.roles}
-				try: 
-					if(guestID not in userRoleIds):
-						log.LogMessage(f"Attempting to apply role guest")
-						await client.add_roles(member, serverRoles[guestID])
-				except Exception as e:
-					log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
-				for i, level in enumerate(membershipLevel[1:]):
-					if(level == "committee"):
-						break
-					roleID = roleIds[level]
-					try: 
-						if(roleID in userRoleIds):
-							log.LogMessage(f"Attempting to apply role {level}")
-							await client.remove_roles(member, serverRoles[roleID])
-					except Exception as e:
-						log.LogMessage(f"Failed to remove non guest roles for user {member.name} for reason {e}")
-			backupWait = False
-		
-	except Exception as e:
-		backupWait = False
-		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
-		return
-	
-
-async def MassMessageNonVerified():
-	verified = [member["id"] for hash, member in userInfo.items()]
-	server = client.get_server(svgeServer)
-	for member in server.members:
-		if(str(member.id) not in str(verified)):
-			try:
-				log.LogMessage(f"Reminded {member.name}\n")
-				await client.send_message(member, "Hi, I'm the SVGE verification bot. You haven't yet verified your Southampton email with me. If you're a member of the university, please send `!email youremail@soton.ac.uk` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
-			except Exception as e:
-				log.LogMessage(f"Failed to remind {member.name} for reason{e}\n")
-
-def CreateVote(msg):
-	voteTitle = msg[0] 
-	voteChannel = msg[1]
-	candidates = []
-	currentCandidate = ""
-	for s in msg[2:]:
-		if(s[-1] == ','):
-			currentCandidate += s[0:-1]
-			candidates.append(currentCandidate)
-			currentCandidate = ""
-		else:
-			currentCandidate += s + " "
-	candidates.append(currentCandidate[:-1])
-	votes[voteTitle] = {"candidates" : {candidate.lower(): {"name": candidate, "count": 0} for candidate in candidates}, "voterids": [], "channelid": voteChannel}
-	return f"Created vote {voteTitle} with candidates {candidates}"
-
-def Vote(msg, id):
-	voteTitle = msg[0]
-	voteForU = ' '.join(msg[1:])
-	voteFor = voteForU.lower()
-	if(voteTitle in votes.keys()):
-		if(id in votes[voteTitle]["voterids"]):
-			return "You've already voted."
-		channel = client.get_channel(votes[voteTitle]["channelid"])
-		validVoters = [member.id for member in channel.voice_members]
-		if(id not in validVoters):
-			return "You're not attending the relevant meeting"
-		if(voteFor in votes[voteTitle]["candidates"].keys()):
-			votes[voteTitle]["candidates"][voteFor]["count"] += 1
-			votes[voteTitle]["voterids"].append(id)
-			return f"You voted for {votes[voteTitle]['candidates'][voteFor]['name']} in the vote for {voteTitle}."
-		else:
-			return f"{voteForU} is not a candidate for {voteTitle} - are you sure you spelled everything correctly?"
-	else:
-		return f"{voteTitle} is not currently an active vote - are you sure you spelled everything correctly? Vote titles are case sensitive."
-
-def EndVote(msg):
-	voteTitle = msg[0]
-	if(voteTitle in votes.keys()):
-		winnerName = []
-		winnerVotes = 0
-		res = f"There were {len(votes[voteTitle]['voterids'])} for the position of {voteTitle}.\n"
-		for candidate, info in votes[voteTitle]['candidates'].items():
-			candidateName = info["name"]
-			count = info["count"]
-			res += f"{candidateName}: {count}\n"
-			if(count > winnerVotes):
-				winnerName = [candidateName]
-				winnerVotes = count
-			elif(count == winnerVotes):
-				winnerName.append(candidateName)
-		if len(winnerName) == 1:
-			res += f"{winnerName} won with {winnerVotes} votes"
-		else:
-			res += f"There was a tie between the candidates {winnerName} with {winnerVotes} votes"
-		del votes[voteTitle]
-		return res
-	else:
-		return "Vote {voteTitle} does not exist"
-
-def GetVotes():
-	res = "Currently active votes:\n"
-	for title, info in votes.items():
-		candidates = ', '.join([candidate["name"] for candidate in info["candidates"].values()])
-		res += f"Vote: `{title}`\nCandidates: `{candidates}`\n\n"
-	return res
-
-
-# Loads variables from a config file
-def LoadConfig(configPath):
-	#discord info
-	global discordToken
-	global svgeServer
-	global owner
-	global membershipLevel
-	global roleIds
-	#gmail info
-	global gmailUser
-	global gmailPw
-	#sheet info
-	global sheetID
-	config = {}
-	with open(configPath, "r") as configJson:
-		config = json.load(configJson)
-	gmailUser = config["gmail"]["user"]
-	gmailPw = config["gmail"]["pw"]
-	discordToken = config["discord"]["token"]
-	svgeServer = config["discord"]["server"]
-	owner = config["owner"]
-	roleIds = config["discord"]["roleIds"]
-	membershipLevel = config["discord"]["membershipLevel"]
-	sheetID = config["sheets"]["backupID"]
-
-
-def LoadUsers():
-	global userInfo
-	try:
-		scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
-		creds = ServiceAccountCredentials.from_json_keyfile_name(clientSecret, scope)
-		gClient = gspread.authorize(creds)
-		sheet = gClient.open("verify_backup").sheet1
-		data = sheet.get_all_records()
-		userInfo = {row["email_hash"] : {"id" : row["id"], "level" : row["level"]} for row in data}
-	except Exception as e:
-		log.LogMessage(f"Failed to authorise with gmail with reason {e}")
-	
-def banUser(userId):
-	if(userId == "0"):
-		return False
-	idToHashMap = {str(info['id']): hash for hash, info in userInfo.items()}
-	if(userId not in idToHashMap.keys()):
-		return False
-	userInfo[idToHashMap[userId]]["level"] = -1
-	return True
-
-def unbanUser(userId):
-	if(userId == "0"):
-		return False
-	idToHashMap = {str(info['id']): hash for hash, info in userInfo.items()}
-	if(userId not in idToHashMap.keys()):
-		return False
-	if(userInfo[idToHashMap[userId]]["level"] < 0):
-		userInfo[idToHashMap[userId]]["level"] = 1
-		return True
-	return False
-
-global log
-if(len(sys.argv) > 1):
-	log = logger(sys.argv[1])
-else:
-	log = logger()
-
-global gdprMessage
-gdprMessage = """We use your information to verify your membership status. By giving us your email address, you agree to us sending you a verification email where it will be stored.
-On the pi running the bot, the email is hashed and overwritten as soon as possible. We also store your unique discord ID on the pi and in a google drive spreadsheet.
-If you'd like these removed, please contact a committee member, however you will lose access to any discord based benefits of your membership status.
-You also agree to our privacy policy which can be found here: https://drive.google.com/file/d/1uGbnFqTkMdIOkDgjbhk3JkSL-c2jRaLe/view"""
+logging.basicConfig(filename='log.txt', level = logging.INFO)
 
 #databases
-global currentData
-currentData = {}
-global emailRequestsCount
-emailRequestsCount = {}
-global currentUpdates
-currentUpdates = 0
-global votes
-votes = {}
-
-global emailTemplate
-with open(str(sys.argv[4]), "r") as template:
-	emailTemplate = template.read()
+db = { \
+    'user_info' : {},
+    'verif_temp' : {},
+    'req_count' : {},
+    'votes' : {}
+    }
 
 try:
-	LoadConfig(sys.argv[2])
+    cfg = utils.config.LoadConfig(args.config)
 except Exception as e:
-	log.LogMessage(f"Failed to load config with reason {e}")
-	sys.exit(1)
-
-global clientSecret
-clientSecret = sys.argv[3]
+    logging.warning(f"Failed to load config with reason {e}")
+    sys.exit(1)
 
 try:
-	LoadUsers()
+    db['user_info'] = utils.config.LoadUsers(cfg)
+    logging.info(f"Loaded {len(db['user_info'])} users.")
 except Exception as e:
-	log.LogMessage(f"Failed to read user_info.json, error\n{e}")
+    logging.warning(f"Failed to load users, error\n{e}")
 
-client = discord.Client()
+bot = commands.Bot(command_prefix = '*')
 
-@client.event
+@bot.event
 async def on_member_join(member):
-	guestID = roleIds["guest"]
-	server = client.get_server(svgeServer)
-	userRoleIds = [role.id for role in member.roles]
-	serverRoles = {role.id : role for role in server.roles}
-	try: 
-		if(guestID not in userRoleIds):
-			log.LogMessage(f"Attempting to apply role guest")
-			await client.add_roles(member, serverRoles[guestID])
-	except Exception as e:
-		log.LogMessage(f"Failed to add guest role for {member.name} for reason {e}")
-	await client.send_message(member, """Welcome to the SVGE discord server! If you are a student, please verify this by sending:
-	`!email myemail@soton.ac.uk`.
-	You should then receive a code via email, which you can use to verify your account by sending:
-	`!verify [code]`.
-	This will give you access to student only areas as well as any perks given by your membership status.
-	GDPR information: 
-	%s""" % (gdprMessage))
-	log.LogMessage(f"Sent welcome message to user {member.name}\n")
+    guestID = cfg['discord']['role_ids']["guest"]
+    guild = bot.get_guild(cfg['discord']['guild'])
+    userRoleIds = [role.id for role in member.roles]
+    guildRoles = {role.id : role for role in guild.roles}
+    try: 
+        if(guestID not in userRoleIds):
+            logging.info(f"Attempting to apply role guest")
+            await member.add_roles(guildRoles[guestID])
+    except Exception as e:
+        logging.warning(f"Failed to add guest role for {member.name} for reason {e}")
+    await member.send_message(f"""Welcome to the {cfg['uni']['society']} discord server! If you are a student, please verify this by sending:
+    `!email myemail@{cfg['uni']['domain']}`.
+    You should then receive a code via email, which you can use to verify your account by sending:
+    `!verify [code]`.
+    This will give you access to student only areas as well as any perks given by your membership status.
+    GDPR information: 
+    %s""" % (cfg['gdpr']))
+    logging.info(f"Sent welcome message to user {member.name}\n")
 
-@client.event
+@bot.event
 async def on_ready():
-	global HELP
-	log.LogMessage('Logged in as')
-	log.LogMessage(client.user.name)
-	log.LogMessage(client.user.id)
-	log.LogMessage('------')
+    logging.info('Logged in as')
+    logging.info(bot.user.name)
+    logging.info(bot.user.id)
+    logging.info('------')
 
-@client.event
-async def on_message(message):
-	if message.channel.is_private and message.author != client.user:
-		try:
-			log.LogMessage(f"Message received from user {message.author.name} ")
-			senderId = message.author.id
-			if(message.content[0] == '!'):
-				command = message.content[1:].split(' ')
-				log.LogMessage(f"Command: {command[0]}\n")
-				if(command[0] == "update"): 
-					if (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner):
-						await UpdateMembershipInfo()
-						await client.send_message(message.channel, "Updated membership info\n")
-					else:
-						await client.send_message(message.channel, "Please ask a committe member to do this\n")
-					return
-				elif(command[0] == "help"):
-					await client.send_message(message.channel, """Commands are: 
-	`!help` - gives this messsage
-	`!update` - (committee only) updates user info
-	`!email [email]` - this will send an email to that address with a verification code (replace [email] with your valid Southampton email address)
-	`!verify [code]` - this will link that email to your discord account, where [code] is the code you were sent after using the !email command
-	`!gdpr` this will give you our gdpr policy
-	`!reset [userId]` - (committee only) resets a users email cap""")
-					return
-				elif(command[0] == "gdpr"):
-					await client.send_message(message.channel, gdprMessage)
-					return
-				elif(command[0] == "updateCount" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
-					await client.send_message(message.channel, f"There are currently {currentUpdates} pending updates")
-				elif(command[0] == "exit" and message.author.id == owner):
-					await client.send_message(message.channel, "Shutting down, goodbye :wave:")
-					log.LogMessage("Shutdown command given, goodbye")
-					client.close()
-				elif(command[0] == "remind" and message.author.id == owner):
-					await MassMessageNonVerified()
-					await client.send_message(message.channel, "Reminded users")
-					return
-				elif(command[0] == "startvote" and message.author.id == owner):
-					await client.send_message(message.channel, CreateVote(command[1:]))
-					return
-				elif(command[0] == "endvote" and message.author.id == owner):
-					await client.send_message(message.channel, EndVote(command[1:]))
-					return
-				elif(command[0] == "votefor" and GetLevelFromUser(message.author.id) >= membershipLevel.index("member")):
-					await client.send_message(message.channel, Vote(command[1:], message.author.id))
-					return
-				elif(command[0] == "getvotes" and GetLevelFromUser(message.author.id) >= membershipLevel.index("member")):
-					await client.send_message(message.channel, GetVotes())
-					return
-				if(len(command) != 2):
-					await client.send_message(message.channel, f"Invalid command {command}")
-					return
-				if(command[0] == "reset"):
-					if(GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner):
-						if(command[1] in emailRequestsCount.keys()):
-							del emailRequestsCount[command[1]]
-							await client.send_message(message.channel, f"Reset user {command[1]}'s email count")
-							return
-						await client.send_message(message.channel, f"Did not find user {command[1]}")
-						return
-					await client.send_message(message.channel, f"You do not have permission to do this")
-					return
-				if(command[0] == "email"):
-					server = client.get_server(svgeServer)
-					if(message.author.id not in [user.id for user in server.members]):
-						await client.send_message(message.channel, f"You are not in the SVGE server, please join before trying to verify")
-						return
-					count = 0
-					if(senderId in emailRequestsCount.keys()):
-						count = emailRequestsCount[senderId]
-					if(count > 3 and GetLevelFromUser(message.author.id) != membershipLevel.index("committee")):
-						await client.send_message(message.channel, f"You've made too many requests, please speak to a committee member to sort this out")
-						return
-					email = command[1].lower()
-					try:
-						domain = email.split('@')[1]
-					except:
-						await client.send_message(message.channel, f"That wasn't a valid southampton email, please make sure to include @soton.ac.uk")
-						return
-					if(domain != "soton.ac.uk"):
-						await client.send_message(message.channel, f"Invalid domain {domain}, please make sure it's an @soton.ac.uk email address")
-						return
-					randomString = GenerateRandomString()
-					emailHash = hashlib.sha256(email.encode('utf-8'))
-					currentData[senderId] = {"email": emailHash.hexdigest(), "randomString": randomString}
-					text = GenerateEmailText(gmailUser, email, currentData[senderId]["randomString"])
-					await SendMail(gmailUser, gmailPw, email, text)
-					await client.send_message(message.channel, f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account. Please send !gdpr to read our policy")
-					email = ""
-					emailRequestsCount[senderId] = count + 1
-					return
-				elif(command[0] == "verify"):
-					if(senderId not in currentData.keys()):
-						await client.send_message(message.channel, "You haven't yet requested a code. You can do so by messaging this bot !email [email] where [email] is a valid Southampton email")
-						return
-					inputCode = command[1]
-					trueCode = currentData[senderId]["randomString"]
-					if(inputCode == trueCode):
-						try:
-							await client.send_message(message.channel, "Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
-							verified = await UpdateUserInfo(senderId, currentData[senderId]["email"])
-							if(not verified):
-								await client.send_message(message.channel, "You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
-								return
-						except:
-							await client.send_message(message.channel, f"Something went wrong, please try again. If it continues to fail, please contact tau")
-							return
-						del currentData[senderId]
-						await client.send_message(message.channel, "Congratulations, you're verified. You should see your permissions adjusted to become correct soon")
-					else:
-						await client.send_message(message.channel, "Sorry, that's not right. Please check the code you entered")
-					return
-				elif(command[0] == "ban" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
-					if(banUser(command[1])):
-						await client.send_message(message.channel, f"Banned user {command[1]}")
-					else:
-						await client.send_message(message.channel, f"Failed to ban user {command[1]}")
-					return
-				elif(command[0] == "unban" and (GetLevelFromUser(message.author.id) == membershipLevel.index("committee") or message.author.id == owner)):
-					if(unbanUser(command[1])):
-						await client.send_message(message.channel, f"Unbanned user {command[1]}")
-					else:
-						await client.send_message(message.channel, f"Failed to unban user {command[1]}")
-					return
+@bot.event
+async def on_message(msg):
+    if type(msg.channel) is discord.DMChannel and msg.author != bot.user:
+        await bot.process_commands(msg)
 
-				
-				await client.send_message(message.channel, f"Unrecognised command {command}")
-		except Exception as e:
-			log.LogMessage(f"Something went wrong with a command, error message: {e}")
-			await client.send_message(message.channel, f"Something went wrong, please try again and if this persists, contact tau")
-			
-while True:
-	try:
-		client.loop.run_until_complete(client.start(discordToken))
-	except BaseException:
-		time.sleep(5)
+@bot.command(name = 'email', help = f"{bot.command_prefix}email youremail@{cfg['uni']['domain']}")
+async def EmailCmd(ctx):
+    
+    try:
+        guild = bot.get_guild(cfg['discord']['guild'])
+        userId = ctx.author.id
+        if(userId not in [user.id for user in guild.members]):
+            await ctx.send(f"You are not in the {cfg['uni']['society']} server, please join before trying to verify")
+            return
+        count = 0 if userId not in db['req_count'].keys() else db['req_count'][userId]
+        if count > 3:
+            await ctx.send(f"You've made too many requests, please speak to a committee member to sort this out")
+            return
+        email = ctx.message.content.split(' ')[1].lower()
+        try:
+            domain = email.split('@')[1]
+        except:
+            await ctx.send(f"That wasn't a valid {cfg['uni']['name']} email, please make sure to include {cfg['uni']['domain']}")
+            return
+        if(domain != cfg['uni']['domain']):
+            await ctx.send(f"Invalid domain {domain}, please make sure it's an {cfg['uni']['domain']} email address")
+            return
+        randomString = utils.mail.GenerateRandomString()
+        emailText = utils.mail.GenerateEmailText(cfg['gmail']['user'], email, randomString, cfg)
+        await utils.mail.SendMail(cfg['gmail']['user'], cfg['gmail']['pw'], email, emailText)
+        emailHash = hashlib.sha256(email.encode('utf-8')).hexdigest()
+        db['verif_temp'][userId] = {"email": emailHash, "randomString": randomString}
+        db['req_count'][userId] = count + 1
+        await ctx.send(f"We have sent an email to {email} with your code. Please reply with !verify [code] to link your email to your discord account. By performing this command you agree to our GDPR policy. Please send !gdpr to read our policy.")
+        email = ""
+        return
+    except Exception as e:
+        await ctx.send(f"Something went wrong, please try again. If the problem persists, contact a system administrator.")
+        return
 
+@bot.command(name = 'verify', help = f"{bot.command_prefix}verify y0uRc0d3")
+async def VerifCmd(ctx):
+    try:
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        userId = ctx.author.id
+        if(userId not in db['verif_temp'].keys() and False):
+            await ctx.send(f"You haven't yet requested a code. You can do so by messaging this bot !email [email] where [email] is a valid {cfg['uni']['name']} email")
+            return
+        inputCode = ctx.message.content.split(commandStr)[1]
+        trueCode = db['verif_temp'][userId]["randomString"]
+        if(inputCode == trueCode):
+            try:
+                await ctx.send("Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
+                verified = await UpdateUserInfo(ctx, userId, db['verif_temp'][userId]["email"])
+                if(not verified):
+                    await ctx.send("You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
+                    return
+            except:
+                await ctx.send(f"Something went wrong, please try again. If it continues to fail, please contact a member of committee.")
+                return
+            del db['verif_temp'][userId]
+            await ctx.send("Congratulations, you're verified. You should see your permissions adjusted to become correct soon.")
+        else:
+            await ctx.send("Sorry, that's not right. Please check the code you entered.")
+        return
+    except Exception as e:
+        await ctx.send(f"Something went wrong, please try again. If the problem persists, contact a system administrator.")
+        return
 
+@bot.command(name = 'update', hidden = True)
+async def UpdateCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee')):
+            await ctx.send("Please ask a committee member to do this")
+            return
+        await utils.guild.UpdateMembershipInfo(bot, db, cfg)
+        await ctx.send("Updated membership info\n")
+    except Exception as e:
+        await ctx.send("Failed to update with error {e}")
+
+@bot.command(name = 'gdpr', help = "Displays gdpr message")
+async def GdprCmd(ctx):
+    await ctx.send(cfg['gdpr'])
+
+@bot.command(name = 'exit', hidden = True)
+async def ExitCmd(ctx):
+    if(ctx.author.id != cfg['owner']):
+        await ctx.send("You do not have permission to use this command")
+        return
+    await ctx.send("Shutting down, goodbye! :wave:")
+    bot.close()
+
+@bot.command(name = 'remind', hidden = True)
+async def RemindCmd(ctx):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel != utils.guild.GetLevelFromString("committee")):
+        await ctx.send("You do not have permission to use this command")
+        return
+    await utils.guild.MassMessageNonVerified(ctx, bot, db, cfg)
+    await ctx.send("Reminded users")
+
+@bot.command(name = 'startvote', hidden = True)
+async def StartVoteCmd(ctx):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel < utils.guild.GetLevelFromString('committee')):
+        await ctx.send("You do not have permission to use this command")
+        return
+    commandStr = bot.command_prefix + ctx.command.name + ' '
+    input = ctx.message.content.split(commandStr)[1]
+    await utils.voting.CreateVote(ctx, input, db)
+
+@bot.command(name = 'endvote', hidden = True)
+async def EndVoteCmd(ctx):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel < utils.guild.GetLevelFromString('committee')):
+        await ctx.send("You do not have permission to use this command")
+        return
+    commandStr = bot.command_prefix + ctx.command.name + ' '
+    input = ctx.message.content.split(commandStr)[1]
+    await utils.voting.EndVote(ctx, input, bot, db, cfg)
+
+@bot.command(name = 'votefor', help = f"{bot.command_prefix}votefor VoteTitle Candidate")
+async def VoteForCmd(ctx):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel < utils.guild.GetLevelFromString('member')):
+        await ctx.send("You must be a member to vote")
+        return
+    commandStr = bot.command_prefix + ctx.command.name + ' '
+    input = ctx.message.content.split(commandStr)[1]
+    await utils.voting.Vote(ctx, input, ctx.author.id, bot, db, cfg)
+
+@bot.command(name = 'getvotes', help = f"Prints current votes")
+async def GetVotesCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('member')):
+            await ctx.send("You must be a member to see votes")
+            return
+        await utils.voting.GetVotes(ctx, db)
+    except Exception as e:
+        await ctx.send("Something went wrong, please try again. If the problem persists, contact committee")
+
+@bot.command(name = 'reset', hidden = True)
+async def ResetCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee')):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        if(int(input) in db['req_count'].keys()):
+            del db['req_count'][int(input)]
+            await ctx.send(f"Reset user {input}'s email count")
+        else:
+            await ctx.send("Could not find this user in the email count list")
+    except Exception as e:
+        await ctx.send(f"Something went wrong, error: {e}")
+
+@bot.command(name = 'ban', hidden = True)
+async def BanCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee')):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        if(utils.guild.banUser(int(input), db)):
+            await ctx.send(f"Banned user {input}")
+        else:
+            await ctx.send(f"Failed to ban user {input}")
+    except Exception as e:
+        await ctx.send(f"Something went wrong, error: {e}")
+
+@bot.command(name = 'unban', hidden = True)
+async def UnbanCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee')):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        if(utils.guild.unbanUser(int(input), db)):
+            await ctx.send(f"Unbanned user {input}")
+        else:
+            await ctx.send(f"Failed to unban user {input}")
+    except Exception as e:
+        await ctx.send(f"Something went wrong, error: {e}")
+
+bot.run(cfg['discord']['token'])
 
 
