@@ -13,7 +13,7 @@ def GenerateRandomString():
 # Generates email text 
 def GenerateEmailText(user, to, rand, cfg):
     msg = MIMEMultipart('alternative')
-    msg['Subject'] = f"{cfg['societyName']} Email Verification"
+    msg['Subject'] = f"{cfg['uni']['society']} Email Verification"
     msg['From'] = user
     msg['To'] = to
     html = cfg['gmail']['template']

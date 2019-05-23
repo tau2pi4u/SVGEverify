@@ -126,12 +126,12 @@ async def VerifCmd(ctx):
                     await ctx.send("You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
                     return
             except:
-                await ctx.send(f"Something went wrong, please try again. If it continues to fail, please contact tau")
+                await ctx.send(f"Something went wrong, please try again. If it continues to fail, please contact a member of committee.")
                 return
             del db['verif_temp'][userId]
-            await ctx.send("Congratulations, you're verified. You should see your permissions adjusted to become correct soon")
+            await ctx.send("Congratulations, you're verified. You should see your permissions adjusted to become correct soon.")
         else:
-            await ctx.send("Sorry, that's not right. Please check the code you entered")
+            await ctx.send("Sorry, that's not right. Please check the code you entered.")
         return
     except Exception as e:
         await ctx.send(f"Something went wrong, please try again. If the problem persists, contact a system administrator.")
@@ -163,7 +163,8 @@ async def ExitCmd(ctx):
 
 @bot.command(name = 'remind', hidden = True)
 async def RemindCmd(ctx):
-    if(ctx.author.id != cfg['owner']):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel != utils.guild.GetLevelFromString("committee")):
         await ctx.send("You do not have permission to use this command")
         return
     await utils.guild.MassMessageNonVerified(ctx, bot, db, cfg)
