@@ -1,5 +1,5 @@
-
 *.json
+!template_config.json
 *.txt
 *.pyproj
 *.pyc

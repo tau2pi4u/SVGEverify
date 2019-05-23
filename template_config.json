@@ -1,0 +1,28 @@
+{
+	"gmail":
+	{
+		"user" : "username",
+		"pw" : "pw",
+		"template" : "template.html"
+	},
+	"discord":
+	{
+		"token" : "token",
+		"guild" : guild_discord_id,
+		"role_ids" : {role_ids},
+		"membership_level" : [role_names]
+	},
+	"sheets":
+	{
+		"secret" : "client_secret.json",
+		"backup_id": "db_backup_gdrive_id"
+	},
+	"owner" : owner_discord_id,
+	"uni":
+	{
+		"domain" : "domain",
+		"name" : "name_of_uni",
+		"society" : "name_of_society"
+	},
+	"gdpr" : "We use your information to verify your membership status. By giving us your email address, you agree to us sending you a verification email and processing it for the purpose of this bot. On the server running the bot, the email is hashed and the plaintext version overwritten as soon as possible. We also store your unique discord ID on our server and in a google drive spreadsheet. If you'd like these removed, please contact a committee member, however you will lose access to any discord based benefits of your membership status. You also agree to our privacy policy which can be found here: INSERT PRIVACY POLICY LINK HERE"
+}
