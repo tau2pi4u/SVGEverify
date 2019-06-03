@@ -13,7 +13,7 @@ import utils.config
 import argparse
 
 parser = argparse.ArgumentParser()
-parser.add_argument("-c", "--config", default="config.cfg")
+parser.add_argument("-c", "--config", default="config.json")
 args = parser.parse_args()
 
 logging.basicConfig(filename='log.txt', level = logging.INFO)
