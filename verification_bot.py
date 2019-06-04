@@ -14,6 +14,7 @@ import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("-c", "--config", default="config.json")
+parser.add_argument("-d", "--debug", default = False, action='store_true')
 args = parser.parse_args()
 
 logging.basicConfig(filename='log.txt', level = logging.INFO)
@@ -38,7 +39,7 @@ try:
 except Exception as e:
     logging.warning(f"Failed to load users, error\n{e}")
 
-bot = commands.Bot(command_prefix = '*')
+bot = commands.Bot(command_prefix = '*' if args.debug else '!')
 
 @bot.event
 async def on_member_join(member):

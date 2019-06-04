@@ -10,6 +10,7 @@ def LoadConfig(configPath):
         cfg = json.load(configJson)
     with open(cfg['gmail']['template'], "r") as template:
         cfg['gmail']['template'] = template.read()
+    cfg['discord']['membership_level'] = list(cfg['discord']['role_ids'].keys())
     return cfg
 
 def LoadUsers(cfg):

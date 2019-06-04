@@ -9,8 +9,7 @@
 	{
 		"token" : "token",
 		"guild" : guild_discord_id,
-		"role_ids" : {role_ids},
-		"membership_level" : [role_names]
+		"role_ids" : {"guest" : -1, "student": -1},
 	},
 	"sheets":
 	{
