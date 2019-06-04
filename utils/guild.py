@@ -75,6 +75,17 @@ async def UpdateMemberInfo(ctx, emailHash, bot, db, cfg):
     except Exception as e:
         logging.warning(f"Failed to update member info for reason {e}\n")
 
+async def BackupMembershipInfo(bot, db, cfg):
+    try:
+        scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
+        creds = ServiceAccountCredentials.from_json_keyfile_name(cfg['sheets']['secret'], scope)
+        gClient = gspread.authorize(creds)
+        backupCSV = "email_hash,id,level"
+        for emailHash, info in db['user_info'].items():
+            backupCSV += f"\n{str(emailHash)},{int(info['id'])},{int(info['level'])}"
+        gClient.import_csv(cfg['sheets']['backup_id'], backupCSV)
+    except Exception as e:
+        logging.warning(f"Failed to backup for reason {e}")
 
 # Updates the membership data for all members and backs up
 async def UpdateMembershipInfo(bot, db, cfg):

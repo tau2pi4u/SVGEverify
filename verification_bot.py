@@ -131,6 +131,7 @@ async def VerifCmd(ctx):
                 return
             del db['verif_temp'][userId]
             await ctx.send("Congratulations, you're verified. You should see your permissions adjusted to become correct soon.")
+            await utils.guild.BackupMembershipInfo(bot, db, cfg)
         else:
             await ctx.send("Sorry, that's not right. Please check the code you entered.")
         return
@@ -149,6 +150,19 @@ async def UpdateCmd(ctx):
         await ctx.send("Updated membership info\n")
     except Exception as e:
         await ctx.send("Failed to update with error {e}")
+
+@bot.command(name = 'backup', hidden = True)
+async def BackupCmd(ctx):
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(ctx.author.id != cfg['owner'] and userLevel < utils.guild.GetLevelFromString('committee')):
+            await ctx.send("Please ask a committee member to do this")
+            return
+        await utils.guild.BackupMembershipInfo(bot, db, cfg)
+        await ctx.send("Backed-up membership info\n")
+    except Exception as e:
+        await ctx.send("Failed to back-up with error {e}")
+
 
 @bot.command(name = 'gdpr', help = "Displays gdpr message")
 async def GdprCmd(ctx):
