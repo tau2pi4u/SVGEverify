@@ -122,7 +122,7 @@ async def VerifCmd(ctx):
         if(inputCode == trueCode):
             try:
                 await ctx.send("Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
-                verified = await UpdateUserInfo(ctx, userId, db['verif_temp'][userId]["email"])
+                verified = await utils.guild.UpdateUserInfo(ctx, userId, db['verif_temp'][userId]["email"])
                 if(not verified):
                     await ctx.send("You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
                     return
