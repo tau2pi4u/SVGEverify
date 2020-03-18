@@ -171,7 +171,7 @@ async def VerifCmd(ctx):
                 if(not verified):
                     await ctx.send("You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
                     return
-            except:
+            except Exception as e:
                 # something went wrong, so let them know and log it
                 await ctx.send(f"Something went wrong, please try again. If it continues to fail, please contact a member of committee.")
                 logging.error(f"Failed to verify user {ctx.author.name} for reason {e}.")
