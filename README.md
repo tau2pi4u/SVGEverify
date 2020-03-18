@@ -9,6 +9,7 @@ A google service account is also needed to handle the gspread, and the file clie
 The drive should contain two sheets: 
 * `verify_backup`, which should be in the top level of the drive
 * A member roles sheet, the id of which should be in the config  
+
 Read: https://developers.google.com/drive/api/v3/quickstart/python
 
 ## Email
