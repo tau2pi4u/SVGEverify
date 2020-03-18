@@ -6,13 +6,18 @@ import sys
 
 # Loads variables from a config file
 def LoadConfig(configPath):
+    # load the config file
     with open(configPath, "r") as configJson:
         cfg = json.load(configJson)
+    # Load the email template
     with open(cfg['gmail']['template'], "r") as template:
         cfg['gmail']['template'] = template.read()
+    # make the membership levels a list of the role_ids
     cfg['discord']['membership_level'] = list(cfg['discord']['role_ids'].keys())
     return cfg
 
+# Loads the user database backup from a sheet in the top level
+# of the drive with the name "verify_backup"
 def LoadUsers(cfg):
     try:
         scope = ['https://spreadsheets.google.com/feeds', 'https://www.googleapis.com/auth/drive']
