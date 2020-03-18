@@ -107,6 +107,7 @@ async def EmailCmd(ctx):
         return
     except Exception as e:
         await ctx.send(f"Something went wrong, please try again. If the problem persists, contact a system administrator.")
+        logging.error(f"Failed to send email with reason {e}.")
         return
 
 @bot.command(name = 'verify', help = f"{bot.command_prefix}verify y0uRc0d3")
@@ -137,6 +138,7 @@ async def VerifCmd(ctx):
         return
     except Exception as e:
         await ctx.send(f"Something went wrong, please try again. If the problem persists, contact a system administrator.")
+        logging.error(f"Failed to verify email with reason {e}.")
         return
 
 @bot.command(name = 'update', hidden = True)
@@ -174,7 +176,7 @@ async def ExitCmd(ctx):
         await ctx.send("You do not have permission to use this command")
         return
     await ctx.send("Shutting down, goodbye! :wave:")
-    bot.close()
+    await bot.close()
 
 @bot.command(name = 'remind', hidden = True)
 async def RemindCmd(ctx):
