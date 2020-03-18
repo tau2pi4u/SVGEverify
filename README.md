@@ -7,8 +7,14 @@ Python 3.6 or greater is required
 ## Google Drive
 A google service account is also needed to handle the gspread, and the file client_secret.json needs to be where it is indicated by the config.  
 The drive should contain two sheets: 
-* `verify_backup`, which should be in the top level of the drive
-* A member roles sheet, the id of which should be in the config  
+* `verify_backup`, which should be in the top level of the drive.
+* `member_data`, the id of which should be in the config  
+
+### verify_backup
+This backup will be filled in by the bot, so leave it empty
+
+### member_data
+This should contain two columns: `email` and `level`. The levels should be the names you gave the various roles in the config file. This allows different membership tiers. For SVGE we had: `student`, `community member` (people who'd signed up on the SU website) and `committee`.
 
 Read: https://developers.google.com/drive/api/v3/quickstart/python
 
