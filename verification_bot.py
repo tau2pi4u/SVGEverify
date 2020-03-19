@@ -167,7 +167,7 @@ async def VerifCmd(ctx):
                 await ctx.send("Thanks, that's the correct code - I'll let you know when I've successfully updated all my databases!")
                 # Try to verify them - this will fail in cases like them being banned 
                 # or having another account already linked to this email
-                verified = await utils.guild.UpdateUserInfo(ctx, userId, db['verif_temp'][userId]["email"])
+                verified = await utils.guild.UpdateUserInfo(ctx, userId, db['verif_temp'][userId]["email"], bot, db, cfg)
                 if(not verified):
                     await ctx.send("You were not verified. If you've previously signed up and would like to link your email to a different account, please contact a member of committee")
                     return
@@ -373,6 +373,8 @@ async def UnbanCmd(ctx):
             await ctx.send(f"Failed to unban user {input}")
     except Exception as e:
         await ctx.send(f"Something went wrong, error: {e}")
+
+bot.loop.create_task(utils.guild.regular_backup_task(bot, db, cfg))
 
 # Start the bot
 bot.run(cfg['discord']['token'])

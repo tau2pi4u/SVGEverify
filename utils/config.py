@@ -29,3 +29,4 @@ def LoadUsers(cfg):
         return userInfo
     except Exception as e:
         logging.warning(f"Failed to authorise with gmail with reason {e}")
+        return {}

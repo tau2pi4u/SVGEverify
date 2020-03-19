@@ -1,6 +1,8 @@
 import logging
 from oauth2client.service_account import ServiceAccountCredentials
 import gspread
+import asyncio
+from datetime import datetime
 
 # Updates the user info for a given user 
 async def UpdateUserInfo(ctx, userId, emailHash, bot, db, cfg):
@@ -21,7 +23,7 @@ async def UpdateUserInfo(ctx, userId, emailHash, bot, db, cfg):
 
 # Returns the membership level of a user
 def GetLevelFromUser(discordID, db):
-    for email, info in db['user_info'].items():
+    for info in db['user_info'].values():
         if(info["id"] == discordID):
             return info["level"]
     return 0
@@ -74,6 +76,21 @@ async def UpdateMemberInfo(ctx, emailHash, bot, db, cfg):
                     logging.warning(f"Failed to remove role {level} from user {member.name} for reason {e}")
     except Exception as e:
         logging.warning(f"Failed to update member info for reason {e}\n")
+
+async def regular_backup_task(bot, db, cfg):
+    if "backup_period" in cfg.keys():
+        backup_period = cfg['backup_period']
+    else:
+        backup_period = 15 # default to 15 minutely backups
+    logging.info(f"Backups will occur every {backup_period} minutes.")
+    print(f"Backups will occur every {backup_period} minutes.")
+    while True:
+        await asyncio.sleep(60*backup_period) # backup every 15 minutes
+        now = datetime.now()
+        logging.info(f"Backing up membership info at {now.strftime('%d/%m/%Y %H:%M')}")
+        print(f"Backing up membership info at {now.strftime('%d/%m/%Y %H:%M')}")
+        await BackupMembershipInfo(bot, db, cfg)
+
 
 async def BackupMembershipInfo(bot, db, cfg):
     try:
