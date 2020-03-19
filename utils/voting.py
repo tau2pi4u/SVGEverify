@@ -108,7 +108,7 @@ async def EndVote(ctx, msg, bot, db, cfg):
         else:
             rankings = vote_cfg['voter_rankings']
             # fix to be in line with candidate name in dictionary
-            for i, voter_rank in enumerate(rankings):
+            for i in range(len(rankings)):
                 rankings[i] = [vote_cfg['candidate_map'][c.lower()] for c in rankings[i]]			
             candidate_list = vote_cfg['candidates']
             while len(candidate_list) > 1:
