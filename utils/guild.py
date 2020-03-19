@@ -200,10 +200,10 @@ async def UpdateMembershipInfo(bot, db, cfg):
     
 
 async def MassMessageNonVerified(ctx, bot, db, cfg):
-    verified = [member["id"] for hash, member in db['user_info'].items()]
+    verified = [int(member["id"]) for member in db['user_info'].values()]
     guild = bot.get_guild(cfg['discord']['guild'])
     for member in guild.members:
-        if(int(member.id) not in int(verified)):
+        if(int(member.id) not in verified):
             try:
                 logging.info(f"Reminded {member.name}\n")
                 await member.send(f"Hi, I'm the {cfg['uni']['society']} verification bot. You haven't yet verified your {cfg['uni']['name']} email with me. If you're a member of the university, please send `!email youremail@{cfg['uni']['domain']}` and then `!verify [code]` where code is the code I emailed to you. If you're not, then sorry for the spam!")
