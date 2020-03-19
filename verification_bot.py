@@ -197,13 +197,13 @@ async def UpdateCmd(ctx):
     try:
         # Only do it for committee members
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(userLevel < utils.guild.GetLevelFromString('committee')):
+        if(ctx.author.id != cfg['owner'] and userLevel < utils.guild.GetLevelFromString('committee', cfg)):
             await ctx.send("Please ask a committee member to do this")
             return
         await utils.guild.UpdateMembershipInfo(bot, db, cfg)
         await ctx.send("Updated membership info\n")
     except Exception as e:
-        await ctx.send("Failed to update with error {e}")
+        await ctx.send(f"Failed to update with error {e}")
 
 # This backs up the current database to the google sheet 
 # it does not change current roles, so is quicker 
@@ -212,13 +212,13 @@ async def BackupCmd(ctx):
     try:
         # Only do this for committee
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(ctx.author.id != cfg['owner'] and userLevel < utils.guild.GetLevelFromString('committee')):
+        if(ctx.author.id != cfg['owner'] and userLevel < utils.guild.GetLevelFromString('committee', cfg)):
             await ctx.send("Please ask a committee member to do this")
             return
         await utils.guild.BackupMembershipInfo(bot, db, cfg)
         await ctx.send("Backed-up membership info\n")
     except Exception as e:
-        await ctx.send("Failed to back-up with error {e}")
+        await ctx.send(f"Failed to back-up with error {e}")
 
 # this sends the gdpr notice from the config
 @bot.command(name = 'gdpr', help = "Displays gdpr message")
@@ -242,7 +242,7 @@ async def ExitCmd(ctx):
 @bot.command(name = 'remind', hidden = True)
 async def RemindCmd(ctx):
     userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-    if(userLevel != utils.guild.GetLevelFromString("committee")):
+    if(userLevel != utils.guild.GetLevelFromString("committee", cfg)):
         await ctx.send("You do not have permission to use this command")
         return
     await utils.guild.MassMessageNonVerified(ctx, bot, db, cfg)
@@ -264,13 +264,17 @@ async def RemindCmd(ctx):
 # Only committee can do this
 @bot.command(name = 'startvote', hidden = True)
 async def StartVoteCmd(ctx):
-    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-    if(userLevel < utils.guild.GetLevelFromString('committee')):
-        await ctx.send("You do not have permission to use this command")
-        return
-    commandStr = bot.command_prefix + ctx.command.name + ' '
-    input = ctx.message.content.split(commandStr)[1]
-    await utils.voting.CreateVote(ctx, input, db)
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        await utils.voting.CreateVote(ctx, input, db)
+    except Exception as e:
+        logging.error(f"Failed to start vote for reason {e}.")
+        await ctx.send(f"Error: {e}")
 
 # This ends the vote and sends the results (destroying them in the process)
 # Only committee can do this.
@@ -278,13 +282,17 @@ async def StartVoteCmd(ctx):
 # !endvote [votename]
 @bot.command(name = 'endvote', hidden = True)
 async def EndVoteCmd(ctx):
-    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-    if(userLevel < utils.guild.GetLevelFromString('committee')):
-        await ctx.send("You do not have permission to use this command")
-        return
-    commandStr = bot.command_prefix + ctx.command.name + ' '
-    input = ctx.message.content.split(commandStr)[1]
-    await utils.voting.EndVote(ctx, input, bot, db, cfg)
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        await utils.voting.EndVote(ctx, input, bot, db, cfg)
+    except Exception as e:
+        logging.error(f"Failed to end vote for reason {e}.")
+        await ctx.send(f"Error: {e}")
 
 # This destroys the vote results and removes it from the list of votes
 # Only committee can do this.
@@ -292,13 +300,17 @@ async def EndVoteCmd(ctx):
 # !deletevote [votename]
 @bot.command(name = 'deletevote', hidden = True)
 async def DeleteVoteCmd(ctx):
-    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-    if(userLevel < utils.guild.GetLevelFromString('committee')):
-        await ctx.send("You do not have permission to use this command")
-        return
-    commandStr = bot.command_prefix + ctx.command.name + ' '
-    input = ctx.message.content.split(commandStr)[1]
-    await utils.voting.DeleteVote(ctx, input, bot, db, cfg)
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
+            await ctx.send("You do not have permission to use this command")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        await utils.voting.DeleteVote(ctx, input, bot, db, cfg)
+    except Exception as e:
+        logging.error(f"Failed to delete vote for reason {e}.")
+        await ctx.send(f"Error: {e}")
 
 # This allows users to vote for someone. 
 # Command syntax for fptp:
@@ -307,24 +319,29 @@ async def DeleteVoteCmd(ctx):
 # !votefor President, Bernie, Ron
 @bot.command(name = 'votefor', help = f"{bot.command_prefix}votefor VoteTitle Candidate")
 async def VoteForCmd(ctx):
-    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-    if(userLevel < utils.guild.GetLevelFromString('member')):
-        await ctx.send("You must be a member to vote")
-        return
-    commandStr = bot.command_prefix + ctx.command.name + ' '
-    input = ctx.message.content.split(commandStr)[1]
-    await utils.voting.Vote(ctx, input, ctx.author.id, bot, db, cfg)
+    try:
+        userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+        if(userLevel < utils.guild.GetLevelFromString('member', cfg)):
+            await ctx.send("You must be a member to vote")
+            return
+        commandStr = bot.command_prefix + ctx.command.name + ' '
+        input = ctx.message.content.split(commandStr)[1]
+        await utils.voting.Vote(ctx, input, ctx.author.id, bot, db, cfg)
+    except Exception as e:
+        logging.error(f"command {commandStr} failed to vote for reason {e}.")
+        await ctx.send(f"Vote failed. Please try again. If it says your vote has already been counted then you're probably fine.")
 
 # This shows a list of all the active votes and the candidates
 @bot.command(name = 'getvotes', help = f"Prints current votes")
 async def GetVotesCmd(ctx):
     try:
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(userLevel < utils.guild.GetLevelFromString('member')):
+        if(userLevel < utils.guild.GetLevelFromString('member', cfg)):
             await ctx.send("You must be a member to see votes")
             return
         await utils.voting.GetVotes(ctx, db)
     except Exception as e:
+        logging.error(f"Failed to get votes for reason {e}.")
         await ctx.send("Something went wrong, please try again. If the problem persists, contact committee")
 
 # This resets the email count on a user
@@ -335,7 +352,7 @@ async def GetVotesCmd(ctx):
 async def ResetCmd(ctx):
     try:
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(userLevel < utils.guild.GetLevelFromString('committee')):
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
             await ctx.send("You do not have permission to use this command")
             return
         commandStr = bot.command_prefix + ctx.command.name + ' '
@@ -356,7 +373,7 @@ async def ResetCmd(ctx):
 async def BanCmd(ctx):
     try:
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(userLevel < utils.guild.GetLevelFromString('committee')):
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
             await ctx.send("You do not have permission to use this command")
             return
         commandStr = bot.command_prefix + ctx.command.name + ' '
@@ -376,7 +393,7 @@ async def BanCmd(ctx):
 async def UnbanCmd(ctx):
     try:
         userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
-        if(userLevel < utils.guild.GetLevelFromString('committee')):
+        if(userLevel < utils.guild.GetLevelFromString('committee', cfg)):
             await ctx.send("You do not have permission to use this command")
             return
         commandStr = bot.command_prefix + ctx.command.name + ' '

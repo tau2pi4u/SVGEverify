@@ -7,7 +7,7 @@ from datetime import datetime
 # Updates the user info for a given user 
 async def UpdateUserInfo(ctx, userId, emailHash, bot, db, cfg):
     try:
-        mLevel = GetLevelFromString("student")
+        mLevel = GetLevelFromString("student", cfg)
         if(emailHash in db['user_info'].keys() and db['user_info'][emailHash]["id"] != 0): # user already exists
             return False
         if(emailHash in db['user_info'].keys()):
@@ -29,10 +29,11 @@ def GetLevelFromUser(discordID, db):
     return 0
 
 # Returns the membership level integer value of a given role string
-def GetLevelFromString(levelString):
+def GetLevelFromString(levelString, cfg):
     try:
         return cfg['discord']['membership_level'].index(levelString)
-    except:
+    except Exception as e:
+        logging.info(f"Requested unknown membership level {levelString}. Error {e}")
         return 0
 
 async def UpdateMemberInfo(ctx, emailHash, bot, db, cfg):
@@ -57,7 +58,10 @@ async def UpdateMemberInfo(ctx, emailHash, bot, db, cfg):
                 try:
                     roleID = cfg['discord']['role_ids'][level]
                     userRoleIds = [role.id for role in member.roles]
-                    mutedRoleId = cfg['discord']['role_ids']["muted"]
+                    if 'muted' in cfg['discord']['role_ids'].keys():
+                        mutedRoleId = cfg['discord']['role_ids']['muted']
+                    else:
+                        mutedRoleId = -1
                     if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
                         logging.info(f"Attempting to apply role {level} to user {member.name}")
                         await member.add_roles(guildRoles[roleID])
@@ -117,9 +121,9 @@ async def UpdateMembershipInfo(bot, db, cfg):
             hash = hashlib.sha256(row["email"].encode('utf-8')).hexdigest()
             if(hash in db['user_info'].keys()):
                 if(db['user_info'][hash]["level"] != -1):
-                    db['user_info'][hash]["level"] = int(GetLevelFromString(row["level"]))
+                    db['user_info'][hash]["level"] = int(GetLevelFromString(row["level"], cfg))
             else:
-                db['user_info'][hash] = {"level" : int(GetLevelFromString(row["level"])), "id": 0}
+                db['user_info'][hash] = {"level" : int(GetLevelFromString(row["level"], cfg)), "id": 0}
         try:
             backupCSV = "email_hash,id,level"
             for emailHash, info in db['user_info'].items():
@@ -149,7 +153,10 @@ async def UpdateMembershipInfo(bot, db, cfg):
                         try:
                             roleID = int(cfg['discord']['role_ids'][level])
                             userRoleIds = [role.id for role in member.roles]
-                            mutedRoleId = cfg['discord']['role_ids']["muted"]
+                            if 'muted' in cfg['discord']['role_ids'].keys():
+                                mutedRoleId = cfg['discord']['role_ids']['muted']
+                            else:
+                                mutedRoleId = -1
                             if(roleID not in userRoleIds and mutedRoleId not in userRoleIds):
                                 logging.info(f"Attempting to apply role {level} to user {member.name}")
                                 await member.add_roles(guildRoles[roleID])

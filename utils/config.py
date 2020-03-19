@@ -14,6 +14,7 @@ def LoadConfig(configPath):
         cfg['gmail']['template'] = template.read()
     # make the membership levels a list of the role_ids
     cfg['discord']['membership_level'] = list(cfg['discord']['role_ids'].keys())
+    logging.info(f"Membership levels: {list(enumerate(cfg['discord']['membership_level']))}")
     return cfg
 
 # Loads the user database backup from a sheet in the top level
