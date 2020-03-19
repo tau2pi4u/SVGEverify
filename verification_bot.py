@@ -286,6 +286,20 @@ async def EndVoteCmd(ctx):
     input = ctx.message.content.split(commandStr)[1]
     await utils.voting.EndVote(ctx, input, bot, db, cfg)
 
+# This destroys the vote results and removes it from the list of votes
+# Only committee can do this.
+# Syntax is:
+# !deletevote [votename]
+@bot.command(name = 'deletevote', hidden = True)
+async def DeleteVoteCmd(ctx):
+    userLevel = utils.guild.GetLevelFromUser(ctx.author.id, db)
+    if(userLevel < utils.guild.GetLevelFromString('committee')):
+        await ctx.send("You do not have permission to use this command")
+        return
+    commandStr = bot.command_prefix + ctx.command.name + ' '
+    input = ctx.message.content.split(commandStr)[1]
+    await utils.voting.DeleteVote(ctx, input, bot, db, cfg)
+
 # This allows users to vote for someone. 
 # Command syntax for fptp:
 # !votefor President, Bernie

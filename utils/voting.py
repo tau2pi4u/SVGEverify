@@ -1,3 +1,6 @@
+import operator
+from random import shuffle
+
 async def CreateVote(ctx, msg, db):
     try:
         vote_opts=msg.split(',')
@@ -27,14 +30,14 @@ async def CreateVote(ctx, msg, db):
             vote_cfg['voter_rankings'] = []
         if 'channel' in vote_cfg.keys():
             vote_cfg['channel'] = int(vote_cfg['channel'])
+        vote_cfg['active'] = True
         db['votes'][vote_cfg['name'].lower()] = vote_cfg
         await ctx.send(f"Created vote {vote_cfg['name']} with candidates {vote_cfg['candidates']}")
     except Exception as e:
-        await ctx.send("Failed to create vote, exception: {e}")
+        await ctx.send(f"Failed to create vote, exception: {e}")
     
 
 async def Vote(ctx, msg, id, bot, db, cfg):
-    from random import shuffle
     try:
         vote_title = msg.split(',')[0]
         vote_candidates = msg.split(vote_title + ',')[1].strip()
@@ -42,6 +45,9 @@ async def Vote(ctx, msg, id, bot, db, cfg):
         vote_title = vote_title.lower().strip()
         if(vote_title not in db['votes'].keys()):
             await ctx.send(f"{vote_title} is not a valid vote title")
+            return
+        if not db['votes'][vote_title]['active']:
+            await ctx.send(f"{vote_title} is not currently active.")
             return
         vote_type = db['votes'][vote_title]['type']
         if('channel' in db['votes'][vote_title].keys()):
@@ -87,17 +93,17 @@ async def Vote(ctx, msg, id, bot, db, cfg):
         await ctx.send(f"Something went wrong, please try again. Error: {e}")
 
 async def EndVote(ctx, msg, bot, db, cfg):
-    import operator
     try:
         vote_title = msg.strip().lower()
         if vote_title not in db['votes'].keys():
             await ctx.send(f"{vote_title} not a valid vote")
+            return
         vote_cfg = db['votes'][vote_title]
         vote_type = vote_cfg['type']
         if vote_type == 'fptp':
             result = dict(sorted(vote_cfg['count'].items(), key=operator.itemgetter(1), reverse=True))
             await ctx.send(f"Results for vote: {vote_cfg['name']}\n{result}")
-            del db['votes'][vote_title]
+            db['votes'][vote_title]['active'] = False
             return
         else:
             rankings = vote_cfg['voter_rankings']
@@ -130,9 +136,24 @@ async def EndVote(ctx, msg, bot, db, cfg):
                             rankings[i].remove(last_place)
                     await ctx.send(f"Round results: {round_result}\nRemoved candidate: {last_place}")
             await ctx.send(f"Exited without a majority. Remaining vote list: {rankings}")
-            del db['votes'][vote_title]
+            db['votes'][vote_title]['active'] = False
     except Exception as e:
         await ctx.send(f"Something went wrong, please try again. Error: {e}")
+
+async def DeleteVote(ctx, msg, bot, db, cfg):
+    try:
+        vote_title = msg.strip().lower()
+        if vote_title not in db['votes'].keys():
+            await ctx.send(f"{vote_title} not a valid vote")
+            return
+        if db['votes'][vote_title]['active']:
+            await ctx.send(f"{vote_title} is still active. Please end the vote first.")
+            return
+        del db['votes'][vote_title]
+        await ctx.send(f"Deleted vote for role {vote_title}")
+    except Exception as e:
+        await ctx.send(f"Something went wrong, please try again. Error: {e}")
+
 
 async def GetVotes(ctx, db):
     if not db['votes']:
@@ -140,6 +161,9 @@ async def GetVotes(ctx, db):
     else:
         res = "Currently active votes:\n"
         for vote in db['votes'].values():
+            # Skip inactive votes
+            if not vote['active']:
+                continue
             candidates = ', '.join([candidate for candidate in vote["candidates"]])
             res += f"Vote: `{vote['name']}`\nCandidates: `{candidates}`\nType: `{vote['type']}`\n\n"
         await ctx.send(res)
